@@ -1,10 +1,18 @@
 use super::control_id::*;
 use crate::util::*;
+use crate::focus::*;
 
 use flo_scene::*;
 use flo_scene::programs::*;
 use flo_draw::*;
+
+use futures::prelude::*;
 use serde::*;
+
+///
+/// Subprogram ID for the default 'focus' subprogram in a scene
+///
+pub fn subprogram_focus() -> SubProgramId { SubProgramId::called("flo_ui::focus") }
 
 ///
 /// Requests to the Focus subprogram.
@@ -55,4 +63,22 @@ pub enum Focus {
 
     /// Removes a claim added by ClaimControlRegion
     RemoveControlClaim(SubProgramId, ControlId),
+}
+
+impl SceneMessage for Focus {
+    fn default_target() -> StreamTarget {
+        subprogram_focus().into()
+    }
+
+    fn initialise(init_context: &impl SceneInitialisationContext) {
+        // Set up filters for the focus events/updates
+        init_context.connect_programs(StreamSource::Filtered(FilterHandle::for_filter(|scene_updates| scene_updates.map(|update| Focus::Update(update)))), (), StreamId::with_message_type::<SceneUpdate>()).ok();
+        init_context.connect_programs(StreamSource::Filtered(FilterHandle::for_filter(|draw_events| draw_events.map(|event| Focus::Event(event)))), (), StreamId::with_message_type::<DrawEvent>()).ok();
+
+        // Create the standard focus subprogram when a message is sent for the first tiem
+        init_context.add_subprogram(subprogram_focus(), focus, 20);
+
+        // This is the default target for focus messages to this scene
+        init_context.connect_programs((), subprogram_focus(), StreamId::with_message_type::<Focus>()).ok();
+    }
 }
