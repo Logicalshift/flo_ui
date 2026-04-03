@@ -51,59 +51,65 @@ pub fn create_window_scene(window_properties: impl Into<WindowProperties>) -> Ar
     flo_draw_scene.add_subprogram(window_properties_program_id, move |input, context| window_properties_program(input, context, window_properties, drawing_program_id), 1);
 
     // The window scene program configures and runs the actual window scene (it runs in the main scene)
-    let window_scene_program = SubProgramId::new();
-    let running_window_scene = window_scene.clone();
+    let window_scene_program_id = SubProgramId::new();
+    let running_window_scene    = window_scene.clone();
 
-    flo_draw_scene.add_subprogram(window_scene_program, move |_input: InputStream<()>, context| async move {
-        // Add a subprogram in the window scene that relays drawing instructions from the window scene to the drawing window (as the window runs in the 'main' scene, we don't have access here)
-        let drawing_requests = context.send::<DrawingWindowRequest>(drawing_program_id).unwrap();
-        running_window_scene.add_subprogram(subprogram_window(), move |input, context| drawing_relay_program(drawing_requests, input, context), 100);
-
-        // Allow drawing requests to be sent directly to the window, and replace any text operations with path operations
-        let drawing_request_filter = FilterHandle::for_filter(|drawing_requests| {
-            // Flatten the actions to just the draw requests
-            let draw_actions = drawing_requests.flat_map(|req| match req {
-                DrawingRequest::Draw(drawing) => stream::iter(Arc::unwrap_or_clone(drawing))
-            });
-
-            // Process text actions to paths
-            let draw_actions = drawing_without_dashed_lines(draw_actions);
-            let draw_actions = drawing_with_laid_out_text(draw_actions);
-            let draw_actions = drawing_with_text_as_paths(draw_actions);
-
-            // Put back into chunks to draw as much at once as possible
-            draw_actions
-                .ready_chunks(10_000)
-                .map(|req| DrawingWindowRequest::Draw(DrawingRequest::Draw(Arc::new(req))))
-        });
-
-        // Filter drawing requests through the text/dashed lines/laid out text programs
-        running_window_scene.connect_programs((), StreamTarget::Filtered(drawing_request_filter.clone(), subprogram_window()), StreamId::with_message_type::<DrawingRequest>()).unwrap();
-
-        // Forward events from the window to whatever program wants to receive them in the window scene
-        let drawing_events      = running_window_scene.send_to_scene(()).unwrap();
-        flo_draw_scene_context().add_subprogram(event_relay_program_id, move |input, context| event_relay_program(drawing_events, input, context), 20);
-
-        context.send(drawing_program_id).unwrap()
-            .send(DrawingWindowRequest::SendEvents(event_relay_program_id)).await.ok();
-
-        // Run the window scene
-        running_window_scene.run_scene_with_threads(4).await;
-
-        // When the scene stops, also stop the window
-        let drawing_requests = context.send::<DrawingWindowRequest>(drawing_program_id);
-        if let Ok(mut drawing_requests) = drawing_requests {
-            drawing_requests.send(DrawingWindowRequest::CloseWindow).await.ok();
-        }
-
-        // Stop the other programs we started in the scene
-        context.send_message(SceneControl::Close(window_properties_program_id)).await.ok();
-        context.send_message(SceneControl::Close(event_relay_program_id)).await.ok();
-        context.send_message(SceneControl::Close(drawing_program_id)).await.ok();
-    }, 1);
+    flo_draw_scene.add_subprogram(window_scene_program_id, move |input, context| window_scene_program(input, context, drawing_program_id, event_relay_program_id, window_properties_program_id, running_window_scene), 1);
 
     // The window scene is ready to go
     window_scene
+}
+
+///
+/// The window scene program runs in the main scene. It configures the window scene so that it can communicate with the
+/// window running in the main scene, and then actually runs the scene itself.
+///
+async fn window_scene_program(_input: InputStream<()>, context: SceneContext, drawing_program_id: SubProgramId, event_relay_program_id: SubProgramId, window_properties_program_id: SubProgramId, running_window_scene: Arc<Scene>) {
+    // Add a subprogram in the window scene that relays drawing instructions from the window scene to the drawing window (as the window runs in the 'main' scene, we don't have access here)
+    let drawing_requests = context.send::<DrawingWindowRequest>(drawing_program_id).unwrap();
+    running_window_scene.add_subprogram(subprogram_window(), move |input, context| drawing_relay_program(drawing_requests, input, context), 100);
+
+    // Allow drawing requests to be sent directly to the window, and replace any text operations with path operations
+    let drawing_request_filter = FilterHandle::for_filter(|drawing_requests| {
+        // Flatten the actions to just the draw requests
+        let draw_actions = drawing_requests.flat_map(|req| match req {
+            DrawingRequest::Draw(drawing) => stream::iter(Arc::unwrap_or_clone(drawing))
+        });
+
+        // Process text actions to paths
+        let draw_actions = drawing_without_dashed_lines(draw_actions);
+        let draw_actions = drawing_with_laid_out_text(draw_actions);
+        let draw_actions = drawing_with_text_as_paths(draw_actions);
+
+        // Put back into chunks to draw as much at once as possible
+        draw_actions
+            .ready_chunks(10_000)
+            .map(|req| DrawingWindowRequest::Draw(DrawingRequest::Draw(Arc::new(req))))
+    });
+
+    // Filter drawing requests through the text/dashed lines/laid out text programs
+    running_window_scene.connect_programs((), StreamTarget::Filtered(drawing_request_filter.clone(), subprogram_window()), StreamId::with_message_type::<DrawingRequest>()).unwrap();
+
+    // Forward events from the window to whatever program wants to receive them in the window scene
+    let drawing_events      = running_window_scene.send_to_scene(()).unwrap();
+    flo_draw_scene_context().add_subprogram(event_relay_program_id, move |input, context| event_relay_program(drawing_events, input, context), 20);
+
+    context.send(drawing_program_id).unwrap()
+        .send(DrawingWindowRequest::SendEvents(event_relay_program_id)).await.ok();
+
+    // Run the window scene
+    running_window_scene.run_scene_with_threads(4).await;
+
+    // When the scene stops, also stop the window
+    let drawing_requests = context.send::<DrawingWindowRequest>(drawing_program_id);
+    if let Ok(mut drawing_requests) = drawing_requests {
+        drawing_requests.send(DrawingWindowRequest::CloseWindow).await.ok();
+    }
+
+    // Stop the other programs we started in the scene
+    context.send_message(SceneControl::Close(window_properties_program_id)).await.ok();
+    context.send_message(SceneControl::Close(event_relay_program_id)).await.ok();
+    context.send_message(SceneControl::Close(drawing_program_id)).await.ok();
 }
 
 ///
