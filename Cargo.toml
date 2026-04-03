@@ -46,4 +46,4 @@ flo_render_software     = { git = "https://github.com/Logicalshift/flo_draw", br
 # flo_render_canvas       = { path = "../../flo_draw/render_canvas"}
 # flo_render_gl_offscreen = { path = "../../flo_draw/render_gl_offscreen"}
 # flo_render_software     = { path = "../../flo_draw/render_software"}
-# flo_svg                 = { path = "../../flo_svg/svg" }
+
