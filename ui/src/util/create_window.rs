@@ -1,5 +1,6 @@
 use flo_draw::*;
 use flo_draw::draw_scene::*;
+use flo_draw::canvas::*;
 use flo_draw::canvas::scenery::*;
 use flo_scene::*;
 use flo_scene::programs::*;
@@ -58,8 +59,25 @@ pub fn create_window_scene(window_properties: impl Into<WindowProperties>) -> Ar
         let drawing_requests = context.send::<DrawingWindowRequest>(drawing_program_id).unwrap();
         running_window_scene.add_subprogram(subprogram_window(), move |input, context| drawing_relay_program(drawing_requests, input, context), 100);
 
-        // Allow drawing requests to be sent directly to the window
-        let drawing_request_filter = FilterHandle::for_filter(|drawing_requests| drawing_requests.map(|req| DrawingWindowRequest::Draw(req)));
+        // Allow drawing requests to be sent directly to the window, and replace any text operations with path operations
+        let drawing_request_filter = FilterHandle::for_filter(|drawing_requests| {
+            // Flatten the actions to just the draw requests
+            let draw_actions = drawing_requests.flat_map(|req| match req {
+                DrawingRequest::Draw(drawing) => stream::iter(Arc::unwrap_or_clone(drawing))
+            });
+
+            // Process text actions to paths
+            let draw_actions = drawing_without_dashed_lines(draw_actions);
+            let draw_actions = drawing_with_laid_out_text(draw_actions);
+            let draw_actions = drawing_with_text_as_paths(draw_actions);
+
+            // Put back into chunks to draw as much at once as possible
+            draw_actions
+                .ready_chunks(10_000)
+                .map(|req| DrawingWindowRequest::Draw(DrawingRequest::Draw(Arc::new(req))))
+        });
+
+        // Filter drawing requests through the text/dashed lines/laid out text programs
         running_window_scene.connect_programs((), StreamTarget::Filtered(drawing_request_filter.clone(), subprogram_window()), StreamId::with_message_type::<DrawingRequest>()).unwrap();
 
         // Forward events from the window to whatever program wants to receive them in the window scene
