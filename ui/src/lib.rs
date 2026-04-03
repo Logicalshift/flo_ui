@@ -1,7 +1,14 @@
-pub mod dialog;
-pub mod focus;
+/// Describes the messages that can be sent to the UI subprograms
 pub mod subprograms;
+
+/// Common utilties, like a way to describe paths used by the user interface
 pub mod util;
+
+/// The Focus subprogram handles directing mouse and keyboard input to the appropriate owning subprogram
+pub mod focus;
+
+/// The Dialog subprogram displays dialogs that the user can interact with in various ways
+pub mod dialog;
 
 /// flo_draw provides basic window rendering and event handling
 pub use flo_draw            as draw;
