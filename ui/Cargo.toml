@@ -9,6 +9,7 @@ description = "User interface components built for flo_draw/flo_scene"
 
 [dependencies]
 flo_draw            = { version = "0.4", features = [ "render-software" ], default-features = false }
+flo_render_software = "0.4"
 
 flo_binding         = "3.0"
 flo_scene           = "0.3"

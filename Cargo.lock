@@ -1176,6 +1176,7 @@ dependencies = [
  "egui",
  "flo_binding",
  "flo_draw",
+ "flo_render_software",
  "flo_scene",
  "flo_scene_binding",
  "flo_scene_guest",
