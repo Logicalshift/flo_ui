@@ -34,3 +34,6 @@ pub use flo_scene_binding   as scene_binding;
 
 /// flo_render_software can be used to render flo_canvas instructions offscreen
 pub use flo_render_software as render2d;
+
+/// flo_curves is a comprehensive bezier curve and path handling library
+pub use flo_curves          as curves;

@@ -1175,6 +1175,7 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "flo_binding",
+ "flo_curves",
  "flo_draw",
  "flo_render_software",
  "flo_scene",
