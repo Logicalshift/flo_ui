@@ -25,7 +25,7 @@ fn main() {
                 gc.clear_layer();
 
                 // Use the system font to render something
-                gc.declare_font(FontId(1), FontSpec::default().with_family_name("Helvetica").with_family_name("Arial").with_family(FontFamily::SansSerif));
+                gc.declare_font(FontId(1), FontSpec::system_ui_font());
                 gc.set_font_size(FontId(1), 100.0);
 
                 // Draw some centered text
@@ -33,10 +33,6 @@ fn main() {
                 gc.begin_line_layout(500.0, 500.0, TextAlignment::Center);
                 gc.layout_text(FontId(1), "Hello, world".to_string());
                 gc.draw_text_layout();
-
-                // Also draw a rectangle in case something happens to the text
-                gc.rect(100.0, 100.0, 200.0, 200.0);
-                gc.fill();
             }.boxed()).await;
         }, 1);
     });
