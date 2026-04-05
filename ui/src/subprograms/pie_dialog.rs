@@ -24,9 +24,6 @@ pub enum PieDialog {
     /// Sets the title of the pie dialog (displayed on the outer rim)
     SetTitle(String),
 
-    /// Sets whether or not the 'detail dialog' will be displayed
-    SetHasDetailDialog(bool),
-
     /// Renders to the pie dialog, converting to the polar coordinates for the 
     Draw(Arc<Vec<Draw>>),
 
