@@ -1,4 +1,7 @@
 use super::pie_animation::*;
+use crate::subprograms::*;
+
+use flo_scene::*;
 
 use std::f64;
 
@@ -42,6 +45,8 @@ impl Default for PieDialogProgram {
         }
     }
 }
+
+// Config
 
 impl PieDialogProgram {
     ///
@@ -98,5 +103,16 @@ impl PieDialogProgram {
     pub fn with_has_detail(mut self, new_has_detail: bool) -> Self {
         self.has_detail = new_has_detail;
         self
+    }
+}
+
+// Execution
+
+impl PieDialogProgram {
+    ///
+    /// Runs the subprogram for this pie dialog
+    ///
+    pub async fn run(mut self, input: InputStream<PieDialog>, context: SceneContext) {
+
     }
 }
