@@ -1,5 +1,6 @@
 use super::pie_animation::*;
 use crate::subprograms::*;
+use crate::util::*;
 
 use flo_scene::*;
 use flo_draw::canvas::*;
@@ -14,6 +15,9 @@ use std::f64;
 pub struct PieDialogProgram {
     /// The animation used to show and hide this dialog
     animation:      PieAnimation,
+
+    /// Where the center of the pie is located
+    center:         UiPoint,
 
     /// The inner radius of the pie slice
     inner_radius:   f64,
@@ -44,6 +48,7 @@ impl Default for PieDialogProgram {
     fn default() -> Self {
         PieDialogProgram {
             namespace:      NamespaceId::new(),
+            center:         UiPoint(0.0, 0.0),
             layer:          LayerId(0),
             animation:      PieAnimation::ExpandFanOut,
             inner_radius:   32.0,
@@ -62,10 +67,21 @@ impl PieDialogProgram {
     ///
     /// Creates a new pie dialog with a layer and a namespace
     ///
-    pub fn new(namespace: NamespaceId, layer: LayerId) -> Self {
+    pub fn new(center: impl Coordinate + Coordinate2D, angle_degrees: f64, namespace: NamespaceId, layer: LayerId) -> Self {
         Self::default()
+            .with_center(center)
+            .with_angle(angle_degrees)
             .with_namespace(namespace)
             .with_layer(layer)
+    }
+
+    ///
+    /// Sets the center position of the pie
+    ///
+    #[inline]
+    pub fn with_center(mut self, center: impl Coordinate + Coordinate2D) -> Self {
+        self.center = UiPoint::from_components(&[center.x(), center.y()]);
+        self
     }
 
     ///
@@ -165,8 +181,8 @@ impl PieDialogProgram {
         let theta = self.angle + theta;
 
         // Calculate the new position from the old one
-        let new_x = r * theta.sin();
-        let new_y = r * theta.cos();
+        let new_x = r * theta.sin() + self.center.x();
+        let new_y = r * theta.cos() + self.center.y();
 
         TCoord::from_components(&[new_x, new_y])
     }
