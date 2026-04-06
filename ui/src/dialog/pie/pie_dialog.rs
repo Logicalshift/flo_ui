@@ -2,6 +2,7 @@ use super::pie_animation::*;
 use crate::subprograms::*;
 
 use flo_scene::*;
+use flo_draw::canvas::*;
 
 use std::f64;
 
@@ -30,11 +31,19 @@ pub struct PieDialogProgram {
 
     /// If true, there's a '...' icon for configuring more details for this program
     has_detail:     bool,
+
+    /// The namespace where this pie is rendered
+    namespace:      NamespaceId,
+
+    /// The layer where this pie slice is rendered
+    layer:          LayerId,
 }
 
 impl Default for PieDialogProgram {
     fn default() -> Self {
-        PieDialogProgram { 
+        PieDialogProgram {
+            namespace:      NamespaceId::new(),
+            layer:          LayerId(0),
             animation:      PieAnimation::ExpandFanOut,
             inner_radius:   32.0,
             outer_radius:   100.0,
@@ -49,6 +58,22 @@ impl Default for PieDialogProgram {
 // Config
 
 impl PieDialogProgram {
+    ///
+    /// Sets the namespace to use for rendering the pie slice
+    ///
+    pub fn with_namespace(mut self, new_namespace: NamespaceId) -> Self {
+        self.namespace = new_namespace;
+        self
+    }
+
+    ///
+    /// Sets the layer to use for rendering the pie slice
+    ///
+    pub fn with_layer(mut self, new_layer: LayerId) -> Self {
+        self.layer = new_layer;
+        self
+    }
+
     ///
     /// Sets the animation for the program
     ///
