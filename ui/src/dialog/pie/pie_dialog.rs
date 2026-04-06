@@ -70,6 +70,7 @@ impl PieDialogProgram {
     ///
     /// Sets the namespace to use for rendering the pie slice
     ///
+    #[inline]
     pub fn with_namespace(mut self, new_namespace: NamespaceId) -> Self {
         self.namespace = new_namespace;
         self
@@ -78,6 +79,7 @@ impl PieDialogProgram {
     ///
     /// Sets the layer to use for rendering the pie slice
     ///
+    #[inline]
     pub fn with_layer(mut self, new_layer: LayerId) -> Self {
         self.layer = new_layer;
         self
@@ -86,6 +88,7 @@ impl PieDialogProgram {
     ///
     /// Sets the animation for the program
     ///
+    #[inline]
     pub fn with_animation(mut self, new_animation: PieAnimation) -> Self {
         self.animation = new_animation;
         self
@@ -94,6 +97,7 @@ impl PieDialogProgram {
     ///
     /// Sets the inner radius of the pie slice
     ///
+    #[inline]
     pub fn with_inner_radius(mut self, new_radius: f64) -> Self {
         self.inner_radius = new_radius;
         self
@@ -102,6 +106,7 @@ impl PieDialogProgram {
     ///
     /// Sets the outer radius of the pie slice
     ///
+    #[inline]
     pub fn with_outer_radius(mut self, new_radius: f64) -> Self {
         self.outer_radius = new_radius;
         self
@@ -110,6 +115,7 @@ impl PieDialogProgram {
     ///
     /// Sets the angle of the slice (specified in degrees, converted to radians)
     ///
+    #[inline]
     pub fn with_angle(mut self, new_angle_degrees: f64) -> Self {
         self.angle = new_angle_degrees.to_radians();
         self
@@ -118,6 +124,7 @@ impl PieDialogProgram {
     ///
     /// Sets the 'width' of the slice in pixels (number of pixels from the flat coordinate scheme that covers the whole range)
     ///
+    #[inline]
     pub fn with_width(mut self, new_width: f64) -> Self {
         self.width = new_width;
         self
@@ -126,6 +133,7 @@ impl PieDialogProgram {
     ///
     /// Sets the title displayed on the outside of the slice
     ///
+    #[inline]
     pub fn with_title(mut self, new_title: String) -> Self {
         self.title = new_title;
         self
@@ -134,6 +142,7 @@ impl PieDialogProgram {
     ///
     /// Sets whether there's a '...' icon for configuring more details for this program
     ///
+    #[inline]
     pub fn with_has_detail(mut self, new_has_detail: bool) -> Self {
         self.has_detail = new_has_detail;
         self
