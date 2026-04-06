@@ -59,6 +59,15 @@ impl Default for PieDialogProgram {
 
 impl PieDialogProgram {
     ///
+    /// Creates a new pie dialog with a layer and a namespace
+    ///
+    pub fn new(namespace: NamespaceId, layer: LayerId) -> Self {
+        Self::default()
+            .with_namespace(namespace)
+            .with_layer(layer)
+    }
+
+    ///
     /// Sets the namespace to use for rendering the pie slice
     ///
     pub fn with_namespace(mut self, new_namespace: NamespaceId) -> Self {
