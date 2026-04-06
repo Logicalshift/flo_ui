@@ -223,6 +223,8 @@ impl PieDialogProgram {
     /// Runs the subprogram for this pie dialog
     ///
     pub async fn run(self, input: InputStream<PieDialog>, context: SceneContext) {
+        let Some(our_program_id) = context.current_program_id() else { return };
+
         // Namespace and layer that we'll be drawing on
         let namespace   = self.namespace;
         let layer       = self.layer;
@@ -241,7 +243,7 @@ impl PieDialogProgram {
         let outer_radius = bind(self.outer_radius);
         let title        = bind(self.title.clone());
 
-        // Stream for processing the draw instructions (winds up owning 'self')
+        // Stream for processing the draw instructions (winds up owning 'self' to do the translation)
         let (send_drawing, recv_drawing) = mpsc::channel::<Draw>(1000);
 
         let with_dashed_lines   = drawing_without_dashed_lines(recv_drawing);
@@ -258,6 +260,29 @@ impl PieDialogProgram {
             draw.render_bezier_shape(attributes.iter(), path_set.iter());
             stream::iter(draw)
         });
+
+        // Tell SceneControl to create a subprogram to update the drawing binding whenever the redrawn paths is changed
+        let update_draw_binding = draw_binding.clone();
+        context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input: InputStream<()>, _| {
+            async move {
+                // We just monitor the drawing stream
+                drop(input);
+
+                let mut drawing = redrawn_paths.ready_chunks(10_000);
+
+                while let Some(new_instructions) = drawing.next().await {
+                    // Copy the old drawing
+                    let old_draw = update_draw_binding.get();
+
+                    // Append the new drawing
+                    let new_draw = old_draw.iter().cloned()
+                        .chain(new_instructions);
+
+                    // Store as the new drawing binding
+                    update_draw_binding.set(Arc::new(new_draw.collect()));
+                }
+            }
+        }, 1)).await.ok();
 
         // Process the input
         let mut input = input;
