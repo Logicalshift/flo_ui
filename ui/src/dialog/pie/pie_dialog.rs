@@ -3,6 +3,7 @@ use crate::subprograms::*;
 
 use flo_scene::*;
 use flo_draw::canvas::*;
+use flo_curves::*;
 
 use std::f64;
 
@@ -146,6 +147,28 @@ impl PieDialogProgram {
     pub fn with_has_detail(mut self, new_has_detail: bool) -> Self {
         self.has_detail = new_has_detail;
         self
+    }
+
+    ///
+    /// Maps a point from 'flat' space to 'pie' space
+    ///
+    #[inline]
+    pub fn map_point<TCoord>(&self, pos: &TCoord) -> TCoord
+    where 
+        TCoord: Coordinate + Coordinate2D,
+    {
+        // The distance from the center is the y position plus the inner radius (so y=0 is the inner circle)
+        let r = pos.y() + self.inner_radius;
+
+        // The angle is 'x' distance around the pie from the 'angle'
+        let theta = (pos.x()/(2.0*f64::consts::PI*r)) * 2.0*f64::consts::PI;
+        let theta = self.angle + theta;
+
+        // Calculate the new position from the old one
+        let new_x = r * theta.sin();
+        let new_y = r * theta.cos();
+
+        TCoord::from_components(&[new_x, new_y])
     }
 }
 
