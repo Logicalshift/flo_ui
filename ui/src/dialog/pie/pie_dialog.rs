@@ -186,6 +186,27 @@ impl PieDialogProgram {
 
         TCoord::from_components(&[new_x, new_y])
     }
+
+    ///
+    /// Maps a point from 'pie' space to 'flat' space
+    ///
+    #[inline]
+    pub fn unmap_point<TCoord>(&self, pos: &TCoord) -> TCoord
+    where 
+        TCoord: Coordinate + Coordinate2D,
+    {
+        let dx = pos.x() - self.center.x();
+        let dy = pos.y() - self.center.y();
+
+        let r     = (dx * dx + dy * dy).sqrt();
+        let theta = dx.atan2(dy);
+
+        let x = (theta - self.angle) * r;
+        let y = r - self.inner_radius;
+
+        TCoord::from_components(&[x, y])
+    }
+
 }
 
 // Execution
@@ -196,5 +217,58 @@ impl PieDialogProgram {
     ///
     pub async fn run(mut self, input: InputStream<PieDialog>, context: SceneContext) {
 
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    pub fn map_zero_point() {
+        let dialog_program = PieDialogProgram::default()
+            .with_center(UiPoint(100.0, 100.0))
+            .with_inner_radius(20.0)
+            .with_outer_radius(100.0)
+            .with_angle(0.0);
+
+        let zero_point = dialog_program.map_point(&UiPoint(0.0, 0.0));
+        assert!((zero_point.x()-100.0).abs() < 0.1, "{:?}", zero_point);
+        assert!((zero_point.y()-120.0).abs() < 0.1, "{:?}", zero_point);
+    }
+
+    #[test]
+    pub fn map_furthest_point() {
+        let dialog_program = PieDialogProgram::default()
+            .with_center(UiPoint(100.0, 100.0))
+            .with_inner_radius(20.0)
+            .with_outer_radius(100.0)
+            .with_angle(0.0);
+
+        let furthest_point = dialog_program.map_point(&UiPoint(0.0, 80.0));
+        assert!((furthest_point.x()-100.0).abs() < 0.1, "{:?}", furthest_point);
+        assert!((furthest_point.y()-200.0).abs() < 0.1, "{:?}", furthest_point);
+    }
+
+    #[test]
+    pub fn unmap_points() {
+        let dialog_program = PieDialogProgram::default()
+            .with_center(UiPoint(100.0, 100.0))
+            .with_inner_radius(20.0)
+            .with_outer_radius(100.0)
+            .with_angle(0.0);
+
+        fn check_unmap(program: &PieDialogProgram, point: UiPoint) {
+            let mapped_point    = program.map_point(&point);
+            let unmapped_point  = program.unmap_point(&mapped_point);
+
+            assert!((point.x() - unmapped_point.x() < 0.01), "{:?} != {:?}", point, unmapped_point);
+            assert!((point.y() - unmapped_point.y() < 0.01), "{:?} != {:?}", point, unmapped_point);
+        }
+
+        check_unmap(&dialog_program, UiPoint(0.0, 0.0));
+        check_unmap(&dialog_program, UiPoint(0.0, 100.0));
+        check_unmap(&dialog_program, UiPoint(50.0, 100.0));
+        check_unmap(&dialog_program, UiPoint(-50.0, 0.0));
     }
 }
