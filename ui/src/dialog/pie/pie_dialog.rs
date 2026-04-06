@@ -7,8 +7,10 @@ use flo_scene::*;
 use flo_scene::programs::*;
 use flo_draw::canvas::*;
 use flo_curves::*;
+use flo_curves::bezier::*;
 
 use futures::prelude::*;
+use futures::channel::mpsc;
 
 use std::f64;
 use std::sync::*;
@@ -238,6 +240,24 @@ impl PieDialogProgram {
         // Title is rendered at the outer radius
         let outer_radius = bind(self.outer_radius);
         let title        = bind(self.title.clone());
+
+        // Stream for processing the draw instructions (winds up owning 'self')
+        let (send_drawing, recv_drawing) = mpsc::channel::<Draw>(1000);
+
+        let with_dashed_lines   = drawing_without_dashed_lines(recv_drawing);
+        let with_text_layout    = drawing_with_laid_out_text(with_dashed_lines);
+        let with_glyph_paths    = drawing_with_text_as_paths(with_text_layout);
+        let as_paths            = drawing_to_attributed_paths::<UiPath, _>(with_glyph_paths);
+        let with_transform      = as_paths.map(move |(attributes, path_set)| {
+                let new_paths = path_set.iter().flat_map(|path| distort_path::<_, _, UiPath>(path, |point, _, _| self.map_point(&point), 1.0, 0.1))
+                    .collect::<Vec<_>>();
+                (attributes, new_paths)
+            });
+        let redrawn_paths       = with_transform.flat_map(|(attributes, path_set)| {
+            let mut draw = vec![];
+            draw.render_bezier_shape(attributes.iter(), path_set.iter());
+            stream::iter(draw)
+        });
 
         // Process the input
         let mut input = input;
