@@ -2,11 +2,16 @@ use super::pie_animation::*;
 use crate::subprograms::*;
 use crate::util::*;
 
+use flo_binding::*;
 use flo_scene::*;
+use flo_scene::programs::*;
 use flo_draw::canvas::*;
 use flo_curves::*;
 
+use futures::prelude::*;
+
 use std::f64;
+use std::sync::*;
 
 ///
 /// Configuration and a way to run pie dialogs
@@ -215,8 +220,61 @@ impl PieDialogProgram {
     ///
     /// Runs the subprogram for this pie dialog
     ///
-    pub async fn run(mut self, input: InputStream<PieDialog>, context: SceneContext) {
+    pub async fn run(self, input: InputStream<PieDialog>, context: SceneContext) {
+        // Namespace and layer that we'll be drawing on
+        let namespace   = self.namespace;
+        let layer       = self.layer;
 
+        // Original angle and center (used when the position changes)
+        let original_center = self.center;
+        let original_angle  = self.angle;
+
+        // Binding for the instructions used to redraw the pie slice (coordinates transformed)
+        let draw_binding = bind(Arc::<Vec<Draw>>::new(vec![]));
+
+        // Current position is used to calculate the layer transform
+        let current_pos = bind((original_center, original_angle));
+
+        // Title is rendered at the outer radius
+        let outer_radius = bind(self.outer_radius);
+        let title        = bind(self.title.clone());
+
+        // Process the input
+        let mut input = input;
+
+        while let Some(msg) = input.next().await {
+            match msg {
+                PieDialog::SetPosition(new_center, new_angle) => {
+                    current_pos.set((new_center, new_angle));
+                },
+
+                PieDialog::SetRadius(new_outer_radius) => {
+                    outer_radius.set(new_outer_radius);
+                },
+
+                PieDialog::SetTitle(new_title) => {
+                    title.set(new_title);
+                },
+
+                PieDialog::Draw(drawing) => {
+                    // TODO: transform paths according to map_point
+                    // TODO: resources like fonts, etc get passed through
+                    // TOOD: also need to convert text to paths for this conversion
+                    todo!()
+                },
+
+                PieDialog::ClaimRegion { program, region, control, z_index } => {
+                    // Need to transform/recalculate the path and then add to the claims
+                    // (Also need a subprogram to manage them)
+                    todo!()
+                },
+
+                PieDialog::Close => {
+                    // TODO: animation
+                    break;
+                },
+            }
+        }
     }
 }
 
