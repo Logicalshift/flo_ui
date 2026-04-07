@@ -184,6 +184,24 @@ impl PieDialogProgram {
             outer_radius:   self.outer_radius,
         }
     }
+
+    ///
+    /// The width of the pie slice coordinate system (x goes from -width/2 .. width/2)
+    ///
+    pub fn width(&self) -> f64 {
+        let width = (self.outer_radius + self.inner_radius)*f64::consts::PI/4.0;
+
+        width
+    }
+
+    ///
+    /// The height of the pie slice coordinate system (y goes from 0 .. height)
+    ///
+    pub fn height(&self) -> f64 {
+        let height = self.outer_radius - self.inner_radius;
+
+        height
+    }
 }
 
 // Execution

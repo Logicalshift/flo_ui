@@ -21,6 +21,9 @@ fn main() {
             .with_outer_radius(300.0)
             .with_title("Pie dialog");
 
+        let pie_w = pie.width();
+        let pie_h = pie.height();
+
         window.add_subprogram(pie_program, move |input, context| { pie.run(input, context) }, 1);
 
         // Run a subprogram that renders 'Hello, world' to the window
@@ -51,7 +54,7 @@ fn main() {
 
             // Draw a rectangle
             pie_drawing.new_path();
-            pie_drawing.rect(-100.0, 0.0, 100.0, 236.0);
+            pie_drawing.rect((-pie_w/2.0) as _, 0.0, (pie_w/2.0) as _, 236.0);
             pie_drawing.stroke_color(Color::Rgba(0.6, 0.6, 0.6, 1.0));
             pie_drawing.line_width_pixels(1.0);
             pie_drawing.stroke();
@@ -63,9 +66,9 @@ fn main() {
             // Draw some centered text
             let mut y = 120.0;
 
-            while y < 236.0-18.0 {
+            while y < pie_h-18.0 {
                 pie_drawing.fill_color(Color::Rgba(0.0, 0.0, 0.6, 1.0));
-                pie_drawing.begin_line_layout(0.0, y, TextAlignment::Center);
+                pie_drawing.begin_line_layout(0.0, y as _, TextAlignment::Center);
                 pie_drawing.layout_text(FontId(1), "Pie dialog".to_string());
                 pie_drawing.draw_text_layout();
 
