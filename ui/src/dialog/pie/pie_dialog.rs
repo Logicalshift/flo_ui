@@ -193,92 +193,96 @@ impl PieDialogProgram {
     ///
     /// Runs the subprogram for this pie dialog
     ///
-    pub async fn run(self, input: InputStream<PieDialog>, context: SceneContext) {
-        let Some(our_program_id) = context.current_program_id() else { return };
+    pub fn run(self, input: InputStream<PieDialog>, context: SceneContext) -> impl 'static + Send + Future<Output=()> {
+        async move {
+            let Some(our_program_id) = context.current_program_id() else { return };
 
-        // Namespace and layer that we'll be drawing on
-        let namespace   = self.namespace;
-        let layer       = self.layer;
+            // Namespace and layer that we'll be drawing on
+            let namespace   = self.namespace;
+            let layer       = self.layer;
 
-        // Original angle and center (used when the position changes)
-        let original_center = self.center;
-        let original_angle  = self.angle;
+            // Original angle and center (used when the position changes)
+            let original_center = self.center;
+            let original_angle  = self.angle;
 
-        // Binding for the instructions used to redraw the pie slice (coordinates transformed)
-        let draw_binding = bind(Arc::<Vec<Draw>>::new(vec![]));
+            // Binding for the instructions used to redraw the pie slice (coordinates transformed)
+            let draw_binding = bind(Arc::<Vec<Draw>>::new(vec![]));
 
-        // Current position is used to calculate the layer transform
-        let center      = bind(original_center);
-        let angle       = bind(original_angle);
+            // Current position is used to calculate the layer transform
+            let center      = bind(original_center);
+            let angle       = bind(original_angle);
 
-        // Title is rendered at the outer radius
-        let outer_radius = bind(self.outer_radius);
-        let title        = bind(self.title.clone());
+            // Title is rendered at the outer radius
+            let outer_radius = bind(self.outer_radius);
+            let title        = bind(self.title.clone());
 
-        // Animation status
-        let animation = bind((self.animation, 1.0));
+            // Animation status
+            let animation = bind((self.animation, 1.0));
 
-        // Stream for processing the draw instructions
-        let (send_drawing, recv_drawing) = mpsc::channel::<Draw>(1000);
+            // Stream for processing the draw instructions
+            let (send_drawing, recv_drawing) = mpsc::channel::<Draw>(1000);
 
-        let with_text_layout    = drawing_with_laid_out_text(recv_drawing);
-        let with_glyph_paths    = drawing_with_text_as_paths(with_text_layout);
+            let with_text_layout    = drawing_with_laid_out_text(recv_drawing);
+            let with_glyph_paths    = drawing_with_text_as_paths(with_text_layout);
 
-        // Tell SceneControl to create a subprogram to update the drawing binding whenever the redrawn paths is changed
-        let update_draw_binding = draw_binding.clone();
-        let point_mapping       = self.point_mapping();
+            // Tell SceneControl to create a subprogram to update the drawing binding whenever the redrawn paths is changed
+            let update_draw_binding = draw_binding.clone();
+            let point_mapping       = self.point_mapping();
 
-        context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input, context|
-            pie_dialog_drawing_binding_program(input, context, update_draw_binding, point_mapping, with_glyph_paths), 1)).await.ok();
+            context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input, context|
+                pie_dialog_drawing_binding_program(input, context, update_draw_binding, point_mapping, with_glyph_paths), 1)).await.ok();
 
-        // Tell SceneControl to create a subprogram to perform the actual rendering of the slice
-        let draw_center     = center.clone();
-        let draw_angle      = angle.clone();
-        let draw_animation  = animation.clone();
-        context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input, context|
-             pie_dialog_drawing_program(
-                input, 
-                context, 
-                (namespace, layer), 
-                draw_binding, 
-                draw_center, 
-                draw_angle,
-                draw_animation
-            ), 3)).await.ok();
+            // Tell SceneControl to create a subprogram to perform the actual rendering of the slice
+            let draw_center     = center.clone();
+            let draw_angle      = angle.clone();
+            let draw_animation  = animation.clone();
+            context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input, context|
+                 pie_dialog_drawing_program(
+                    input, 
+                    context, 
+                    (namespace, layer), 
+                    draw_binding, 
+                    draw_center, 
+                    draw_angle,
+                    draw_animation
+                ), 3)).await.ok();
 
-        // Process the input
-        let mut input           = input;
-        let mut send_drawing    = send_drawing;
+            // Process the input
+            let mut input           = input;
+            let mut send_drawing    = send_drawing;
 
-        while let Some(msg) = input.next().await {
-            match msg {
-                PieDialog::SetPosition(new_center, new_angle) => {
-                    center.set(new_center);
-                    angle.set(new_angle);
-                },
+            while let Some(msg) = input.next().await {
+                match msg {
+                    PieDialog::SetPosition(new_center, new_angle) => {
+                        center.set(new_center);
+                        angle.set(new_angle);
+                    },
 
-                PieDialog::SetRadius(new_outer_radius) => {
-                    outer_radius.set(new_outer_radius);
-                },
+                    PieDialog::SetRadius(new_outer_radius) => {
+                        outer_radius.set(new_outer_radius);
+                    },
 
-                PieDialog::SetTitle(new_title) => {
-                    title.set(new_title);
-                },
+                    PieDialog::SetTitle(new_title) => {
+                        title.set(new_title);
+                    },
 
-                PieDialog::Draw(drawing) => {
-                    send_drawing.send_all(&mut stream::iter(drawing.iter().map(|draw| Ok(draw.clone())))).await.ok();
-                },
+                    PieDialog::Draw(drawing) => {
+                        for draw in drawing.iter().clone() {
+                            send_drawing.send(draw.clone()).await.ok();
+                        }
+                    },
 
-                PieDialog::ClaimRegion { program, region, control, z_index } => {
-                    // Need to transform/recalculate the path and then add to the claims
-                    // (Also need a subprogram to manage them)
-                    todo!()
-                },
+                    PieDialog::ClaimRegion { program, region, control, z_index } => {
+                        // Need to transform/recalculate the path and then add to the claims
+                        // (Also need a subprogram to manage them)
+                        // todo!()
+                    },
 
-                PieDialog::Close => {
-                    // TODO: animation
-                    break;
-                },
+                    PieDialog::Close => {
+                        // TODO: animation
+                        break;
+                    },
+                }
             }
         }
     }
