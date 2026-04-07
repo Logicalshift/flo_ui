@@ -214,6 +214,26 @@ impl PieDialogProgram {
         TCoord::from_components(&[x, y])
     }
 
+    ///
+    /// Transforms any paths found in the supplied drawing, returning a new drawing (which just draws the paths)
+    ///
+    /// Things like layer clearing and resource operations will need to be processed separately from this.
+    ///
+    pub async fn transform_paths(&self, drawing: impl 'static + Send + Unpin + Stream<Item=Draw>) -> Vec<Draw> {
+        let as_paths    = drawing_to_attributed_paths::<UiPath, _>(drawing);
+        let transformed = as_paths.map(|(attributes, path_set)| {
+                let new_paths = path_set.iter().flat_map(|path| distort_path::<_, _, UiPath>(path, |point, _, _| self.map_point(&point), 1.0, 0.1))
+                    .collect::<Vec<_>>();
+                (attributes, new_paths)
+            });
+        let redrawn     = transformed.flat_map(|(attributes, path_set)| {
+            let mut draw = vec![];
+            draw.render_bezier_shape(attributes.iter(), path_set.iter());
+            stream::iter(draw)
+        });
+
+        redrawn.collect::<_>().await
+    }
 }
 
 // Execution
