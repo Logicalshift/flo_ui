@@ -162,8 +162,8 @@ impl PieDialogProgram {
     /// Sets the title displayed on the outside of the slice
     ///
     #[inline]
-    pub fn with_title(mut self, new_title: String) -> Self {
-        self.title = new_title;
+    pub fn with_title(mut self, new_title: impl Into<String>) -> Self {
+        self.title = new_title.into();
         self
     }
 
