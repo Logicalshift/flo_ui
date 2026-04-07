@@ -13,7 +13,7 @@ use std::sync::*;
 ///
 /// These are the raw messages that can be exchanged with the main pie dialog program.
 ///
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum PieDialog {
     /// Sets the central point of the pie dialog and the central angle
     SetPosition(UiPoint, f64),
@@ -32,4 +32,8 @@ pub enum PieDialog {
 
     /// Animates the dialog closed, then stops the pie dialog program
     Close,
+}
+
+impl SceneMessage for PieDialog {
+
 }
