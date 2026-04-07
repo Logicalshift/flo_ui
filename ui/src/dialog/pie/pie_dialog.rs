@@ -1,4 +1,6 @@
+use super::drawing_binding::*;
 use super::pie_animation::*;
+use super::point_mapping::*;
 use crate::subprograms::*;
 use crate::util::*;
 
@@ -50,14 +52,6 @@ pub struct PieDialogProgram {
 
     /// The layer where this pie slice is rendered
     layer:          LayerId,
-}
-
-///
-/// Describes how a point is mapped in a pie dialog
-///
-#[derive(Clone, Copy, Debug)]
-struct PieDialogPointMapping {
-    inner_radius:   f64,
 }
 
 impl Default for PieDialogProgram {
@@ -192,71 +186,6 @@ impl PieDialogProgram {
     }
 }
 
-impl PieDialogPointMapping {
-    ///
-    /// Maps a point from 'flat' space to 'pie' space
-    ///
-    #[inline]
-    pub fn map_point<TCoord>(&self, pos: &TCoord) -> TCoord
-    where 
-        TCoord: Coordinate + Coordinate2D,
-    {
-        // The distance from the center is the y position plus the inner radius (so y=0 is the inner circle)
-        let r = pos.y() + self.inner_radius;
-
-        // The angle is 'x' distance around the pie from the 'angle'
-        let theta = (pos.x()/(2.0*f64::consts::PI*r)) * 2.0*f64::consts::PI;
-        let theta = theta;
-
-        // Calculate the new position from the old one
-        let new_x = r * theta.sin();
-        let new_y = r * theta.cos();
-
-        TCoord::from_components(&[new_x, new_y])
-    }
-
-    ///
-    /// Maps a point from 'pie' space to 'flat' space
-    ///
-    #[inline]
-    pub fn unmap_point<TCoord>(&self, pos: &TCoord) -> TCoord
-    where 
-        TCoord: Coordinate + Coordinate2D,
-    {
-        let dx = pos.x();
-        let dy = pos.y();
-
-        let r     = (dx * dx + dy * dy).sqrt();
-        let theta = dx.atan2(dy);
-
-        let x = theta * r;
-        let y = r - self.inner_radius;
-
-        TCoord::from_components(&[x, y])
-    }
-
-    ///
-    /// Transforms any paths found in the supplied drawing, returning a new drawing (which just draws the paths)
-    ///
-    /// Things like layer clearing and resource operations will need to be processed separately from this.
-    ///
-    pub async fn transform_paths(&self, drawing: impl 'static + Send + Unpin + Stream<Item=Draw>) -> Vec<Draw> {
-        let as_paths    = drawing_to_attributed_paths::<UiPath, _>(drawing);
-        let transformed = as_paths.map(|(attributes, path_set)| {
-                let new_paths = path_set.iter().flat_map(|path| distort_path::<_, _, UiPath>(path, |point, _, _| self.map_point(&point), 1.0, 0.1))
-                    .collect::<Vec<_>>();
-                (attributes, new_paths)
-            });
-        let redrawn     = transformed.flat_map(|(attributes, path_set)| {
-            let mut draw = vec![];
-            draw.render_bezier_shape(attributes.iter(), path_set.iter());
-            stream::iter(draw)
-        });
-
-        redrawn.collect::<_>().await
-    }
-}
-
 // Execution
 
 impl PieDialogProgram {
@@ -294,106 +223,8 @@ impl PieDialogProgram {
         let update_draw_binding = draw_binding.clone();
         let point_mapping       = self.point_mapping();
 
-        context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input: InputStream<()>, context| {
-            async move {
-                // We just monitor the drawing stream
-                drop(input);
-
-                let mut drawing             = with_glyph_paths.ready_chunks(10_000);
-                let Ok(mut draw_immediate)  = context.send(()) else { return; };
-
-                while let Some(new_instructions) = drawing.next().await {
-                    // Split up/process the drawing instructions
-                    let mut cleared             = false;
-                    let mut shapes              = vec![];
-                    let mut other_instructions  = vec![];
-
-                    for new_draw in new_instructions.into_iter() {
-                        match &new_draw {
-                            // Path operations
-                            Draw::Path(_)                       |
-                            Draw::Fill                          |
-                            Draw::Stroke                        |
-                            Draw::LineWidth(_)                  |
-                            Draw::LineWidthPixels(_)            |
-                            Draw::LineJoin(_)                   |
-                            Draw::LineCap(_)                    |
-                            Draw::NewDashPattern                |
-                            Draw::DashLength(_)                 |
-                            Draw::DashOffset(_)                 |
-                            Draw::FillColor(_)                  |
-                            Draw::FillTexture(_, _, _)          |
-                            Draw::FillGradient(_, _, _)         |
-                            Draw::FillTransform(_)              |
-                            Draw::StrokeColor(_)                |
-                            Draw::WindingRule(_)                |
-                            Draw::BlendMode(_)                  => { shapes.push(new_draw); }
-
-                            // Semi-supported for path state
-                            Draw::PushState                     |
-                            Draw::PopState                      => { shapes.push(new_draw.clone()); other_instructions.push(new_draw); }
-
-                            // Clearing (we just assume everything clears the layer)
-                            Draw::ClearCanvas(_)                |
-                            Draw::ClearLayer                    |
-                            Draw::ClearAllLayers                => { cleared = true; shapes.clear(); }
-
-                            // Resource ops, evaluated immediately
-                            Draw::Sprite(_)                     |
-                            Draw::MoveSpriteFrom(_)             |
-                            Draw::ClearSprite                   |
-                            Draw::SpriteTransform(_)            |
-                            Draw::DrawSprite(_)                 |
-                            Draw::DrawSpriteWithFilters(_, _)   |
-                            Draw::Texture(_, _)                 |
-                            Draw::Font(_, _)                    |
-                            Draw::Gradient(_, _)                => { other_instructions.push(new_draw); }
-
-                            // Unsupported operations
-                            Draw::StartFrame                    |
-                            Draw::ShowFrame                     |
-                            Draw::ResetFrame                    |
-                            Draw::IdentityTransform             |
-                            Draw::CanvasHeight(_)               |
-                            Draw::CenterRegion(_, _)            |
-                            Draw::MultiplyTransform(_)          |
-                            Draw::Unclip                        |
-                            Draw::Clip                          |
-                            Draw::Store                         |
-                            Draw::Restore                       |
-                            Draw::FreeStoredBuffer              |
-                            Draw::Layer(_)                      |
-                            Draw::LayerBlend(_, _)              |
-                            Draw::LayerAlpha(_, _)              |
-                            Draw::SetLayerTransform(_)          |
-                            Draw::SwapLayers(_, _)              |
-                            Draw::PlaceLayerBefore(_, _)        |
-                            Draw::BeginLineLayout(_, _, _)      |
-                            Draw::DrawLaidOutText               |
-                            Draw::DrawText(_, _, _, _)          |
-                            Draw::Namespace(_)                  => { }
-                        }
-                    }
-
-                    // Send the resource instructions immediately
-                    if !other_instructions.is_empty() {
-                        draw_immediate.send(DrawingRequest::Draw(Arc::new(other_instructions))).await.ok();
-                    }
-
-                    // Copy the old drawing (unless there was a 'clear' instruction, in which case just discard it)
-                    let mut new_drawing = if cleared { vec![] } else { update_draw_binding.get().iter().cloned().collect() };
-
-                    // Transform the shapes
-                    if !shapes.is_empty() {
-                        let transformed_shapes = point_mapping.transform_paths(stream::iter(shapes)).await;
-                        new_drawing.extend(transformed_shapes);
-                    }
-
-                    // Store as the new drawing binding
-                    update_draw_binding.set(Arc::new(new_drawing));
-                }
-            }
-        }, 1)).await.ok();
+        context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input, context|
+            pie_dialog_drawing_binding_program(input, context, update_draw_binding, point_mapping, with_glyph_paths), 1)).await.ok();
 
         // Process the input
         let mut input           = input;

@@ -1,0 +1,82 @@
+use crate::util::*;
+
+use flo_draw::canvas::*;
+use flo_curves::*;
+use flo_curves::bezier::*;
+
+use futures::prelude::*;
+
+use std::f64;
+
+///
+/// Describes how a point is mapped in a pie dialog
+///
+#[derive(Clone, Copy, Debug)]
+pub struct PieDialogPointMapping {
+    pub (super) inner_radius: f64,
+}
+
+impl PieDialogPointMapping {
+    ///
+    /// Maps a point from 'flat' space to 'pie' space
+    ///
+    #[inline]
+    pub fn map_point<TCoord>(&self, pos: &TCoord) -> TCoord
+    where 
+        TCoord: Coordinate + Coordinate2D,
+    {
+        // The distance from the center is the y position plus the inner radius (so y=0 is the inner circle)
+        let r = pos.y() + self.inner_radius;
+
+        // The angle is 'x' distance around the pie from the 'angle'
+        let theta = (pos.x()/(2.0*f64::consts::PI*r)) * 2.0*f64::consts::PI;
+        let theta = theta;
+
+        // Calculate the new position from the old one
+        let new_x = r * theta.sin();
+        let new_y = r * theta.cos();
+
+        TCoord::from_components(&[new_x, new_y])
+    }
+
+    ///
+    /// Maps a point from 'pie' space to 'flat' space
+    ///
+    #[inline]
+    pub fn unmap_point<TCoord>(&self, pos: &TCoord) -> TCoord
+    where 
+        TCoord: Coordinate + Coordinate2D,
+    {
+        let dx = pos.x();
+        let dy = pos.y();
+
+        let r     = (dx * dx + dy * dy).sqrt();
+        let theta = dx.atan2(dy);
+
+        let x = theta * r;
+        let y = r - self.inner_radius;
+
+        TCoord::from_components(&[x, y])
+    }
+
+    ///
+    /// Transforms any paths found in the supplied drawing, returning a new drawing (which just draws the paths)
+    ///
+    /// Things like layer clearing and resource operations will need to be processed separately from this.
+    ///
+    pub async fn transform_paths(&self, drawing: impl 'static + Send + Unpin + Stream<Item=Draw>) -> Vec<Draw> {
+        let as_paths    = drawing_to_attributed_paths::<UiPath, _>(drawing);
+        let transformed = as_paths.map(|(attributes, path_set)| {
+                let new_paths = path_set.iter().flat_map(|path| distort_path::<_, _, UiPath>(path, |point, _, _| self.map_point(&point), 1.0, 0.1))
+                    .collect::<Vec<_>>();
+                (attributes, new_paths)
+            });
+        let redrawn     = transformed.flat_map(|(attributes, path_set)| {
+            let mut draw = vec![];
+            draw.render_bezier_shape(attributes.iter(), path_set.iter());
+            stream::iter(draw)
+        });
+
+        redrawn.collect::<_>().await
+    }
+}

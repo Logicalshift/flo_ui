@@ -8,6 +8,8 @@
 
 mod pie_dialog;
 mod pie_animation;
+mod drawing_binding;
+mod point_mapping;
 
 pub use pie_dialog::*;
 pub use pie_animation::*;
