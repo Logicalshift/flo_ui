@@ -9,6 +9,12 @@ use futures::prelude::*;
 
 use std::sync::*;
 
+///
+/// Receives 'flat' drawing instructions from the drawing_stream, and processes them, changing 'draw_binding' to be up to date with the 'mapped' drawing instructions
+///
+/// Positive 'y' coordinates are a distance from the inner radius of the dialog. 'x' coordinates are a distance around the circumference (where 'x=0' is the center
+/// of the dialog)
+///
 pub async fn pie_dialog_drawing_binding_program(input: InputStream<()>, context: SceneContext, draw_binding: Binding<Arc<Vec<Draw>>>, point_mapping: PieDialogPointMapping, drawing_stream: impl 'static + Unpin + Send + Stream<Item=Draw>) {
     // We just monitor the drawing stream
     drop(input);
