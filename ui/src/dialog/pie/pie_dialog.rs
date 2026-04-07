@@ -9,9 +9,7 @@ use flo_binding::*;
 use flo_scene::*;
 use flo_scene::programs::*;
 use flo_draw::canvas::*;
-use flo_draw::canvas::scenery::*;
 use flo_curves::*;
-use flo_curves::bezier::*;
 
 use futures::prelude::*;
 use futures::channel::mpsc;
