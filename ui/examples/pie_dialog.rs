@@ -17,7 +17,7 @@ fn main() {
         // Run a pie dialog subprogram
         let pie_program = SubProgramId::new();
         let pie         = PieDialogProgram::new(UiPoint(500.0, 500.0), 45.0, NamespaceId::new(), LayerId(0))
-            .with_inner_radius(100.0)
+            .with_inner_radius(64.0)
             .with_outer_radius(300.0)
             .with_title("Pie dialog");
 
@@ -51,7 +51,7 @@ fn main() {
 
             // Draw a rectangle
             pie_drawing.new_path();
-            pie_drawing.rect(-100.0, 0.0, 100.0, 200.0);
+            pie_drawing.rect(-100.0, 0.0, 100.0, 236.0);
             pie_drawing.stroke_color(Color::Rgba(0.6, 0.6, 0.6, 1.0));
             pie_drawing.line_width_pixels(1.0);
             pie_drawing.stroke();
@@ -63,7 +63,7 @@ fn main() {
             // Draw some centered text
             let mut y = 120.0;
 
-            while y < 200.0-18.0 {
+            while y < 236.0-18.0 {
                 pie_drawing.fill_color(Color::Rgba(0.0, 0.0, 0.6, 1.0));
                 pie_drawing.begin_line_layout(0.0, y, TextAlignment::Center);
                 pie_drawing.layout_text(FontId(1), "Pie dialog".to_string());
