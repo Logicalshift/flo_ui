@@ -55,6 +55,9 @@ pub async fn pie_dialog_drawing_program(
     // Connect to the drawing request program
     let Ok(mut drawing_request) = context.send(()) else { return; };
 
+    // Wait for things to settle down before starting to draw the dialog (so we're consistently after any other setup that might be happening)
+    context.wait_for_idle(100).await;
+
     // Input initially updates all three states, before listening for further updates
     let mut input = stream::iter([PieDrawingUpdate::UpdatePosition, PieDrawingUpdate::UpdateDrawing, PieDrawingUpdate::UpdateAnimation]).chain(input);
 
