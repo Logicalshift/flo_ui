@@ -58,8 +58,6 @@ pub struct PieDialogProgram {
 #[derive(Clone, Copy, Debug)]
 struct PieDialogPointMapping {
     inner_radius:   f64,
-    angle:          f64,
-    center:         UiPoint,
 }
 
 impl Default for PieDialogProgram {
@@ -187,11 +185,9 @@ impl PieDialogProgram {
     /// Retrieves the mapping type for this program (which can be used to find how points map onto the pie layer)
     ///
     #[inline]
-    pub fn point_mapping(&self) -> PieDialogPointMapping {
+    fn point_mapping(&self) -> PieDialogPointMapping {
         PieDialogPointMapping { 
             inner_radius:   self.inner_radius, 
-            angle:          self.angle,
-            center:         self.center
         }
     }
 }
@@ -210,11 +206,11 @@ impl PieDialogPointMapping {
 
         // The angle is 'x' distance around the pie from the 'angle'
         let theta = (pos.x()/(2.0*f64::consts::PI*r)) * 2.0*f64::consts::PI;
-        let theta = self.angle + theta;
+        let theta = theta;
 
         // Calculate the new position from the old one
-        let new_x = r * theta.sin() + self.center.x();
-        let new_y = r * theta.cos() + self.center.y();
+        let new_x = r * theta.sin();
+        let new_y = r * theta.cos();
 
         TCoord::from_components(&[new_x, new_y])
     }
@@ -227,13 +223,13 @@ impl PieDialogPointMapping {
     where 
         TCoord: Coordinate + Coordinate2D,
     {
-        let dx = pos.x() - self.center.x();
-        let dy = pos.y() - self.center.y();
+        let dx = pos.x();
+        let dy = pos.y();
 
         let r     = (dx * dx + dy * dy).sqrt();
         let theta = dx.atan2(dy);
 
-        let x = (theta - self.angle) * r;
+        let x = theta * r;
         let y = r - self.inner_radius;
 
         TCoord::from_components(&[x, y])
@@ -449,8 +445,8 @@ mod test {
             .with_angle(0.0);
 
         let zero_point = dialog_program.point_mapping().map_point(&UiPoint(0.0, 0.0));
-        assert!((zero_point.x()-100.0).abs() < 0.1, "{:?}", zero_point);
-        assert!((zero_point.y()-120.0).abs() < 0.1, "{:?}", zero_point);
+        assert!((zero_point.x()-0.0).abs() < 0.1, "{:?}", zero_point);
+        assert!((zero_point.y()-20.0).abs() < 0.1, "{:?}", zero_point);
     }
 
     #[test]
@@ -462,8 +458,8 @@ mod test {
             .with_angle(0.0);
 
         let furthest_point = dialog_program.point_mapping().map_point(&UiPoint(0.0, 80.0));
-        assert!((furthest_point.x()-100.0).abs() < 0.1, "{:?}", furthest_point);
-        assert!((furthest_point.y()-200.0).abs() < 0.1, "{:?}", furthest_point);
+        assert!((furthest_point.x()-0.0).abs() < 0.1, "{:?}", furthest_point);
+        assert!((furthest_point.y()-100.0).abs() < 0.1, "{:?}", furthest_point);
     }
 
     #[test]
