@@ -17,8 +17,8 @@ fn main() {
         // Run a pie dialog subprogram
         let pie_program = SubProgramId::new();
         let pie         = PieDialogProgram::new(UiPoint(500.0, 500.0), 45.0, NamespaceId::new(), LayerId(0))
-            .with_inner_radius(20.0)
-            .with_outer_radius(200.0)
+            .with_inner_radius(32.0)
+            .with_outer_radius(300.0)
             .with_title("Pie dialog");
 
         window.add_subprogram(pie_program, move |input, context| { pie.run(input, context) }, 1);
@@ -51,7 +51,7 @@ fn main() {
 
             // Draw a rectangle
             pie_drawing.new_path();
-            pie_drawing.rect(-100.0, 0.0, 100.0, 180.0);
+            pie_drawing.rect(-100.0, 0.0, 100.0, 280.0);
             pie_drawing.stroke_color(Color::Rgba(0.6, 0.6, 0.6, 1.0));
             pie_drawing.line_width_pixels(1.0);
             pie_drawing.stroke();
@@ -61,13 +61,20 @@ fn main() {
             pie_drawing.set_font_size(FontId(1), 18.0);
 
             // Draw some centered text
-            pie_drawing.fill_color(Color::Rgba(0.0, 0.0, 0.6, 1.0));
-            pie_drawing.begin_line_layout(0.0, 150.0, TextAlignment::Center);
-            pie_drawing.layout_text(FontId(1), "Pie dialog".to_string());
-            pie_drawing.draw_text_layout();
+            let mut y = 120.0;
+
+            while y < 280.0-18.0 {
+                pie_drawing.fill_color(Color::Rgba(0.0, 0.0, 0.6, 1.0));
+                pie_drawing.begin_line_layout(0.0, y, TextAlignment::Center);
+                pie_drawing.layout_text(FontId(1), "Pie dialog".to_string());
+                pie_drawing.draw_text_layout();
+
+                y += 24.0;
+            }
 
             pie_drawing.fill_color(Color::Rgba(0.0, 0.0, 0.6, 1.0));
-            pie_drawing.begin_line_layout(0.0, 50.0, TextAlignment::Center);
+            pie_drawing.set_font_size(FontId(1), 30.0);
+            pie_drawing.begin_line_layout(0.0, 75.0, TextAlignment::Center);
             pie_drawing.layout_text(FontId(1), "Demonstration".to_string());
             pie_drawing.draw_text_layout();
 
