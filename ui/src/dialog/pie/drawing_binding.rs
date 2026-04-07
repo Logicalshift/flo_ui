@@ -9,11 +9,11 @@ use futures::prelude::*;
 
 use std::sync::*;
 
-pub async fn pie_dialog_drawing_binding_program(input: InputStream<()>, context: SceneContext, update_draw_binding: Binding<Arc<Vec<Draw>>>, point_mapping: PieDialogPointMapping, with_glyph_paths: impl 'static + Unpin + Send + Stream<Item=Draw>) {
+pub async fn pie_dialog_drawing_binding_program(input: InputStream<()>, context: SceneContext, draw_binding: Binding<Arc<Vec<Draw>>>, point_mapping: PieDialogPointMapping, drawing_stream: impl 'static + Unpin + Send + Stream<Item=Draw>) {
     // We just monitor the drawing stream
     drop(input);
 
-    let mut drawing             = with_glyph_paths.ready_chunks(10_000);
+    let mut drawing             = drawing_stream.ready_chunks(10_000);
     let Ok(mut draw_immediate)  = context.send(()) else { return; };
 
     while let Some(new_instructions) = drawing.next().await {
@@ -95,7 +95,7 @@ pub async fn pie_dialog_drawing_binding_program(input: InputStream<()>, context:
         }
 
         // Copy the old drawing (unless there was a 'clear' instruction, in which case just discard it)
-        let mut new_drawing = if cleared { vec![] } else { update_draw_binding.get().iter().cloned().collect() };
+        let mut new_drawing = if cleared { vec![] } else { draw_binding.get().iter().cloned().collect() };
 
         // Transform the shapes
         if !shapes.is_empty() {
@@ -104,6 +104,6 @@ pub async fn pie_dialog_drawing_binding_program(input: InputStream<()>, context:
         }
 
         // Store as the new drawing binding
-        update_draw_binding.set(Arc::new(new_drawing));
+        draw_binding.set(Arc::new(new_drawing));
     }
 }
