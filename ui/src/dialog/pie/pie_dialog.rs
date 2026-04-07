@@ -1,5 +1,6 @@
 use super::drawing_binding::*;
 use super::pie_animation::*;
+use super::pie_drawing::*;
 use super::point_mapping::*;
 use crate::subprograms::*;
 use crate::util::*;
@@ -207,11 +208,15 @@ impl PieDialogProgram {
         let draw_binding = bind(Arc::<Vec<Draw>>::new(vec![]));
 
         // Current position is used to calculate the layer transform
-        let current_pos = bind((original_center, original_angle));
+        let center      = bind(original_center);
+        let angle       = bind(original_angle);
 
         // Title is rendered at the outer radius
         let outer_radius = bind(self.outer_radius);
         let title        = bind(self.title.clone());
+
+        // Animation status
+        let animation = bind((self.animation, 1.0));
 
         // Stream for processing the draw instructions
         let (send_drawing, recv_drawing) = mpsc::channel::<Draw>(1000);
@@ -226,6 +231,21 @@ impl PieDialogProgram {
         context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input, context|
             pie_dialog_drawing_binding_program(input, context, update_draw_binding, point_mapping, with_glyph_paths), 1)).await.ok();
 
+        // Tell SceneControl to create a subprogram to perform the actual rendering of the slice
+        let draw_center     = center.clone();
+        let draw_angle      = angle.clone();
+        let draw_animation  = animation.clone();
+        context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input, context|
+             pie_dialog_drawing_program(
+                input, 
+                context, 
+                (namespace, layer), 
+                draw_binding, 
+                draw_center, 
+                draw_angle,
+                draw_animation
+            ), 3)).await.ok();
+
         // Process the input
         let mut input           = input;
         let mut send_drawing    = send_drawing;
@@ -233,7 +253,8 @@ impl PieDialogProgram {
         while let Some(msg) = input.next().await {
             match msg {
                 PieDialog::SetPosition(new_center, new_angle) => {
-                    current_pos.set((new_center, new_angle));
+                    center.set(new_center);
+                    angle.set(new_angle);
                 },
 
                 PieDialog::SetRadius(new_outer_radius) => {
