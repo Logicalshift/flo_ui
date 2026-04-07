@@ -12,7 +12,7 @@ use std::sync::*;
 fn main() {
     with_2d_graphics(|| {
         // Create a window scene
-        let window = create_window_scene(WindowProperties::new("Hello, world"));
+        let window = create_window_scene(WindowProperties::new("Pie dialog"));
 
         // Run a pie dialog subprogram
         let pie_program = SubProgramId::new();
