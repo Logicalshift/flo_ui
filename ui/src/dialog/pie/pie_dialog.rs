@@ -6,6 +6,7 @@ use flo_binding::*;
 use flo_scene::*;
 use flo_scene::programs::*;
 use flo_draw::canvas::*;
+use flo_draw::canvas::scenery::*;
 use flo_curves::*;
 use flo_curves::bezier::*;
 
@@ -266,46 +267,115 @@ impl PieDialogProgram {
         // Stream for processing the draw instructions (winds up owning 'self' to do the translation)
         let (send_drawing, recv_drawing) = mpsc::channel::<Draw>(1000);
 
-        let with_dashed_lines   = drawing_without_dashed_lines(recv_drawing);
-        let with_text_layout    = drawing_with_laid_out_text(with_dashed_lines);
+        let with_text_layout    = drawing_with_laid_out_text(recv_drawing);
         let with_glyph_paths    = drawing_with_text_as_paths(with_text_layout);
-        let as_paths            = drawing_to_attributed_paths::<UiPath, _>(with_glyph_paths);
-        let with_transform      = as_paths.map(move |(attributes, path_set)| {
-                let new_paths = path_set.iter().flat_map(|path| distort_path::<_, _, UiPath>(path, |point, _, _| self.map_point(&point), 1.0, 0.1))
-                    .collect::<Vec<_>>();
-                (attributes, new_paths)
-            });
-        let redrawn_paths       = with_transform.flat_map(|(attributes, path_set)| {
-            let mut draw = vec![];
-            draw.render_bezier_shape(attributes.iter(), path_set.iter());
-            stream::iter(draw)
-        });
 
         // Tell SceneControl to create a subprogram to update the drawing binding whenever the redrawn paths is changed
         let update_draw_binding = draw_binding.clone();
-        context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input: InputStream<()>, _| {
+        context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input: InputStream<()>, context| {
             async move {
                 // We just monitor the drawing stream
                 drop(input);
 
-                let mut drawing = redrawn_paths.ready_chunks(10_000);
+                let mut drawing             = with_glyph_paths.ready_chunks(10_000);
+                let Ok(mut draw_immediate)  = context.send(()) else { return; };
 
                 while let Some(new_instructions) = drawing.next().await {
-                    // Copy the old drawing
-                    let old_draw = update_draw_binding.get();
+                    // Split up/process the drawing instructions
+                    let mut cleared             = false;
+                    let mut shapes              = vec![];
+                    let mut other_instructions  = vec![];
 
-                    // Append the new drawing
-                    let new_draw = old_draw.iter().cloned()
-                        .chain(new_instructions);
+                    for new_draw in new_instructions.into_iter() {
+                        match &new_draw {
+                            // Path operations
+                            Draw::Path(_)                       |
+                            Draw::Fill                          |
+                            Draw::Stroke                        |
+                            Draw::LineWidth(_)                  |
+                            Draw::LineWidthPixels(_)            |
+                            Draw::LineJoin(_)                   |
+                            Draw::LineCap(_)                    |
+                            Draw::NewDashPattern                |
+                            Draw::DashLength(_)                 |
+                            Draw::DashOffset(_)                 |
+                            Draw::FillColor(_)                  |
+                            Draw::FillTexture(_, _, _)          |
+                            Draw::FillGradient(_, _, _)         |
+                            Draw::FillTransform(_)              |
+                            Draw::StrokeColor(_)                |
+                            Draw::WindingRule(_)                |
+                            Draw::BlendMode(_)                  => { shapes.push(new_draw); }
+
+                            // Semi-supported for path state
+                            Draw::PushState                     |
+                            Draw::PopState                      => { shapes.push(new_draw.clone()); other_instructions.push(new_draw); }
+
+                            // Clearing (we just assume everything clears the layer)
+                            Draw::ClearCanvas(_)                |
+                            Draw::ClearLayer                    |
+                            Draw::ClearAllLayers                => { cleared = true; shapes.clear(); }
+
+                            // Resource ops, evaluated immediately
+                            Draw::Sprite(_)                     |
+                            Draw::MoveSpriteFrom(_)             |
+                            Draw::ClearSprite                   |
+                            Draw::SpriteTransform(_)            |
+                            Draw::DrawSprite(_)                 |
+                            Draw::DrawSpriteWithFilters(_, _)   |
+                            Draw::Texture(_, _)                 |
+                            Draw::Font(_, _)                    |
+                            Draw::Gradient(_, _)                => { other_instructions.push(new_draw); }
+
+                            // Unsupported operations
+                            Draw::StartFrame                    |
+                            Draw::ShowFrame                     |
+                            Draw::ResetFrame                    |
+                            Draw::IdentityTransform             |
+                            Draw::CanvasHeight(_)               |
+                            Draw::CenterRegion(_, _)            |
+                            Draw::MultiplyTransform(_)          |
+                            Draw::Unclip                        |
+                            Draw::Clip                          |
+                            Draw::Store                         |
+                            Draw::Restore                       |
+                            Draw::FreeStoredBuffer              |
+                            Draw::Layer(_)                      |
+                            Draw::LayerBlend(_, _)              |
+                            Draw::LayerAlpha(_, _)              |
+                            Draw::SetLayerTransform(_)          |
+                            Draw::SwapLayers(_, _)              |
+                            Draw::PlaceLayerBefore(_, _)        |
+                            Draw::BeginLineLayout(_, _, _)      |
+                            Draw::DrawLaidOutText               |
+                            Draw::DrawText(_, _, _, _)          |
+                            Draw::Namespace(_)                  => { }
+                        }
+                    }
+
+                    // Send the resource instructions immediately
+                    if !other_instructions.is_empty() {
+                        draw_immediate.send(DrawingRequest::Draw(Arc::new(other_instructions))).await.ok();
+                    }
+
+                    // Copy the old drawing (unless there was a 'clear' instruction, in which case just discard it)
+                    let mut new_drawing = if cleared { vec![] } else { update_draw_binding.get().iter().cloned().collect() };
+
+                    // Transform the shapes
+                    if !shapes.is_empty() {
+                        let transformed_shapes = self.transform_paths(stream::iter(shapes)).await;
+                        new_drawing.extend(transformed_shapes);
+                    }
 
                     // Store as the new drawing binding
-                    update_draw_binding.set(Arc::new(new_draw.collect()));
+                    update_draw_binding.set(Arc::new(new_drawing));
                 }
             }
         }, 1)).await.ok();
 
         // Process the input
-        let mut input = input;
+        let mut input           = input;
+        let mut send_drawing    = send_drawing;
 
         while let Some(msg) = input.next().await {
             match msg {
@@ -322,10 +392,7 @@ impl PieDialogProgram {
                 },
 
                 PieDialog::Draw(drawing) => {
-                    // TODO: transform paths according to map_point
-                    // TODO: resources like fonts, etc get passed through
-                    // TOOD: also need to convert text to paths for this conversion
-                    todo!()
+                    send_drawing.send_all(&mut stream::iter(drawing.iter().map(|draw| Ok(draw.clone())))).await.ok();
                 },
 
                 PieDialog::ClaimRegion { program, region, control, z_index } => {
