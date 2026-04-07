@@ -73,7 +73,6 @@ fn main() {
             }
 
             pie_drawing.fill_color(Color::Rgba(0.0, 0.0, 0.6, 1.0));
-            pie_drawing.set_font_size(FontId(1), 30.0);
             pie_drawing.begin_line_layout(0.0, 75.0, TextAlignment::Center);
             pie_drawing.layout_text(FontId(1), "Demonstration".to_string());
             pie_drawing.draw_text_layout();
