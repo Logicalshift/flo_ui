@@ -51,7 +51,7 @@ fn main() {
 
             // Draw a rectangle
             pie_drawing.new_path();
-            pie_drawing.rect(-20.0, 0.0, 20.0, 180.0);
+            pie_drawing.rect(-100.0, 0.0, 100.0, 180.0);
             pie_drawing.stroke_color(Color::Rgba(0.6, 0.6, 0.6, 1.0));
             pie_drawing.line_width_pixels(1.0);
             pie_drawing.stroke();

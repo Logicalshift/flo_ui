@@ -28,8 +28,8 @@ impl PieDialogPointMapping {
         // The distance from the center is the y position plus the inner radius (so y=0 is the inner circle)
         let r = pos.y() + self.inner_radius;
 
-        // The angle is 'x' distance around the pie from the 'angle'
-        let theta = (pos.x()/(2.0*f64::consts::PI*r)) * 2.0*f64::consts::PI;
+        // We provide a coordinate scheme that's -100 - +100 in the x range
+        let theta = pos.x()*(0.5*f64::consts::PI)/200.0;
         let theta = theta;
 
         // Calculate the new position from the old one
