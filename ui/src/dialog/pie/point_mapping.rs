@@ -58,14 +58,23 @@ impl PieDialogPointMapping {
     where 
         TCoord: Coordinate + Coordinate2D,
     {
+        const WIDTH: f64    = 200.0;
+        let height          = self.outer_radius - self.inner_radius;
+        let r_min           = self.inner_radius;
+        let r_max           = self.outer_radius;
+
         let dx = pos.x();
         let dy = pos.y();
 
         let r     = (dx * dx + dy * dy).sqrt();
         let theta = dx.atan2(dy);
 
-        let x = theta * r;
-        let y = r - self.inner_radius;
+        let x = theta * WIDTH / (0.5 * f64::consts::PI);
+        let y = if r_min > 0.0 {
+            height * (r / r_min).ln() / (r_max / r_min).ln()
+        } else {
+            r * height / r_max
+        };
 
         TCoord::from_components(&[x, y])
     }
