@@ -52,6 +52,16 @@ pub struct PieDialogProgram {
     layer:          LayerId,
 }
 
+///
+/// Describes how a point is mapped in a pie dialog
+///
+#[derive(Clone, Copy, Debug)]
+struct PieDialogPointMapping {
+    inner_radius:   f64,
+    angle:          f64,
+    center:         UiPoint,
+}
+
 impl Default for PieDialogProgram {
     fn default() -> Self {
         PieDialogProgram {
@@ -174,6 +184,20 @@ impl PieDialogProgram {
     }
 
     ///
+    /// Retrieves the mapping type for this program (which can be used to find how points map onto the pie layer)
+    ///
+    #[inline]
+    pub fn point_mapping(&self) -> PieDialogPointMapping {
+        PieDialogPointMapping { 
+            inner_radius:   self.inner_radius, 
+            angle:          self.angle,
+            center:         self.center
+        }
+    }
+}
+
+impl PieDialogPointMapping {
+    ///
     /// Maps a point from 'flat' space to 'pie' space
     ///
     #[inline]
@@ -264,7 +288,7 @@ impl PieDialogProgram {
         let outer_radius = bind(self.outer_radius);
         let title        = bind(self.title.clone());
 
-        // Stream for processing the draw instructions (winds up owning 'self' to do the translation)
+        // Stream for processing the draw instructions
         let (send_drawing, recv_drawing) = mpsc::channel::<Draw>(1000);
 
         let with_text_layout    = drawing_with_laid_out_text(recv_drawing);
@@ -272,6 +296,8 @@ impl PieDialogProgram {
 
         // Tell SceneControl to create a subprogram to update the drawing binding whenever the redrawn paths is changed
         let update_draw_binding = draw_binding.clone();
+        let point_mapping       = self.point_mapping();
+
         context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input: InputStream<()>, context| {
             async move {
                 // We just monitor the drawing stream
@@ -363,7 +389,7 @@ impl PieDialogProgram {
 
                     // Transform the shapes
                     if !shapes.is_empty() {
-                        let transformed_shapes = self.transform_paths(stream::iter(shapes)).await;
+                        let transformed_shapes = point_mapping.transform_paths(stream::iter(shapes)).await;
                         new_drawing.extend(transformed_shapes);
                     }
 
@@ -422,7 +448,7 @@ mod test {
             .with_outer_radius(100.0)
             .with_angle(0.0);
 
-        let zero_point = dialog_program.map_point(&UiPoint(0.0, 0.0));
+        let zero_point = dialog_program.point_mapping().map_point(&UiPoint(0.0, 0.0));
         assert!((zero_point.x()-100.0).abs() < 0.1, "{:?}", zero_point);
         assert!((zero_point.y()-120.0).abs() < 0.1, "{:?}", zero_point);
     }
@@ -435,7 +461,7 @@ mod test {
             .with_outer_radius(100.0)
             .with_angle(0.0);
 
-        let furthest_point = dialog_program.map_point(&UiPoint(0.0, 80.0));
+        let furthest_point = dialog_program.point_mapping().map_point(&UiPoint(0.0, 80.0));
         assert!((furthest_point.x()-100.0).abs() < 0.1, "{:?}", furthest_point);
         assert!((furthest_point.y()-200.0).abs() < 0.1, "{:?}", furthest_point);
     }
@@ -449,8 +475,8 @@ mod test {
             .with_angle(0.0);
 
         fn check_unmap(program: &PieDialogProgram, point: UiPoint) {
-            let mapped_point    = program.map_point(&point);
-            let unmapped_point  = program.unmap_point(&mapped_point);
+            let mapped_point    = program.point_mapping().map_point(&point);
+            let unmapped_point  = program.point_mapping().unmap_point(&mapped_point);
 
             assert!((point.x() - unmapped_point.x() < 0.01), "{:?} != {:?}", point, unmapped_point);
             assert!((point.y() - unmapped_point.y() < 0.01), "{:?} != {:?}", point, unmapped_point);
