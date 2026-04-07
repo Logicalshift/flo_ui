@@ -14,6 +14,7 @@ use std::f64;
 #[derive(Clone, Copy, Debug)]
 pub struct PieDialogPointMapping {
     pub (super) inner_radius: f64,
+    pub (super) outer_radius: f64,
 }
 
 impl PieDialogPointMapping {
@@ -25,12 +26,22 @@ impl PieDialogPointMapping {
     where 
         TCoord: Coordinate + Coordinate2D,
     {
-        // The distance from the center is the y position plus the inner radius (so y=0 is the inner circle)
-        let r = pos.y() + self.inner_radius;
+        const WIDTH: f64    = 200.0;
+        let height          = self.outer_radius - self.inner_radius;
 
         // We provide a coordinate scheme that's -100 - +100 in the x range
-        let theta = pos.x()*(0.5*f64::consts::PI)/200.0;
+        let theta = pos.x()*(0.5*f64::consts::PI)/WIDTH;
         let theta = theta;
+
+        // The distance from the center scales as we get further away
+        let r_min = self.inner_radius;
+        let r_max = self.outer_radius;
+
+        let r = if r_min > 0.0 {
+            r_min * (r_max / r_min).powf(pos.y() / height)
+        } else {
+            pos.y() * (r_max / height)
+        };
 
         // Calculate the new position from the old one
         let new_x = r * theta.sin();

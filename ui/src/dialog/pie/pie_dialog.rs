@@ -182,7 +182,8 @@ impl PieDialogProgram {
     #[inline]
     fn point_mapping(&self) -> PieDialogPointMapping {
         PieDialogPointMapping { 
-            inner_radius:   self.inner_radius, 
+            inner_radius:   self.inner_radius,
+            outer_radius:   self.outer_radius,
         }
     }
 }
