@@ -4,6 +4,7 @@ use crate::util::*;
 
 use flo_binding::*;
 use flo_scene::*;
+use flo_scene::programs::*;
 use flo_scene_binding::*;
 use flo_draw::canvas::*;
 use flo_curves::arc::*;
@@ -73,9 +74,9 @@ impl PieFocusRegion {
     ///
     /// Creates the claim for this region when the pie is in a certain position
     ///
-    pub fn claim(&self, center: UiPoint, angle: f64) -> Focus {
+    pub fn claim(&self, event_program: SubProgramId, center: UiPoint, angle: f64) -> Focus {
         Focus::ClaimControlRegion { 
-            program:    self.target, 
+            program:    event_program, 
             control:    self.control,
             region:     self.region_for_position(center, angle),
             z_index:    self.z_index,
@@ -85,8 +86,8 @@ impl PieFocusRegion {
     ///
     /// Creates the message to remove the claim for this region
     ///
-    pub fn remove_claim(&self) -> Focus {
-        Focus::RemoveControlClaim(self.target, self.control)
+    pub fn remove_claim(&self, event_program: SubProgramId) -> Focus {
+        Focus::RemoveControlClaim(event_program, self.control)
     }
 }
 
@@ -118,6 +119,11 @@ pub async fn pie_dialog_focus_program(
 
     let position        = computed(move || (center.get(), angle.get()));
     let pie_radius      = computed(move || (inner_radius.get(), outer_radius.get()));
+
+    // Start a subprogram that will handle focus events and pass them on to the appropriate program after mapping them
+    let event_program           = SubProgramId::new();
+    let event_focus_programs    = focus_programs.clone();
+    context.send_message(SceneControl::start_child_program(event_program, our_program_id, move |input, context| pie_dialog_focus_event_program(input, context, event_focus_programs, pie_mapping), 20)).await.ok();
 
     // The paths making up the main 'slice' of the focus program
     let mut slice       = vec![];
@@ -159,7 +165,7 @@ pub async fn pie_dialog_focus_program(
                 for control_id in new_controls.into_iter() {
                     let Some(new_claim) = focus_programs.get(&control_id).cloned() else { continue; };
 
-                    focus_messages.push(new_claim.claim(center, angle));
+                    focus_messages.push(new_claim.claim(event_program, center, angle));
                     claims.insert(control_id, new_claim);
                 }
 
@@ -180,13 +186,13 @@ pub async fn pie_dialog_focus_program(
                     }
 
                     // Update the claim
-                    focus_messages.push(existing_claim.remove_claim());
+                    focus_messages.push(existing_claim.remove_claim(event_program));
 
                     existing_claim.path     = new_claim.path.clone();
                     existing_claim.control  = new_claim.control;
                     existing_claim.target   = new_claim.target;
 
-                    focus_messages.push(existing_claim.claim(center, angle));
+                    focus_messages.push(existing_claim.claim(event_program, center, angle));
                 }
 
                 // Remove any claims that are no longer present
@@ -199,7 +205,7 @@ pub async fn pie_dialog_focus_program(
                 for control_id in removed_controls.into_iter() {
                     let Some(old_claim) = claims.remove(&control_id) else { continue; };
 
-                    focus_messages.push(old_claim.remove_claim());
+                    focus_messages.push(old_claim.remove_claim(event_program));
                 }
 
                 // Send the messages
@@ -235,7 +241,7 @@ pub async fn pie_dialog_focus_program(
                 let transform = Transform2D::translate(center.x() as _, center.y() as _) * Transform2D::rotate(angle as _);
 
                 let background_slice = Focus::ClaimRegion { 
-                    program:    our_program_id, 
+                    program:    event_program, 
                     region:     slice.iter().map(|path| path.map_points(|UiPoint(x, y)| { let (x, y) = transform.transform_point(x as _, y as _); UiPoint(x as _, y as _) })).collect(), 
                     z_index:    pie_z_index,
                 };
@@ -255,7 +261,7 @@ pub async fn pie_dialog_focus_program(
 
                 // Update all of the existing claims with the new positions
                 let focus_messages = claims.values()
-                    .map(|claim| claim.claim(center, angle));
+                    .map(|claim| claim.claim(event_program, center, angle));
 
                 for msg in focus_messages {
                     focus.send(msg).await.ok();
@@ -265,7 +271,7 @@ pub async fn pie_dialog_focus_program(
                 let transform = Transform2D::translate(center.x() as _, center.y() as _) * Transform2D::rotate(angle as _);
 
                 let background_slice = Focus::ClaimRegion { 
-                    program:    our_program_id, 
+                    program:    event_program, 
                     region:     slice.iter().map(|path| path.map_points(|UiPoint(x, y)| { let (x, y) = transform.transform_point(x as _, y as _); UiPoint(x as _, y as _) })).collect(), 
                     z_index:    pie_z_index,
                 };
@@ -281,10 +287,131 @@ pub async fn pie_dialog_focus_program(
     drop(position_lifetime);
 
     // Release all the claims
-    let remove_claims = claims.values().map(|claim| claim.remove_claim());
+    let remove_claims = claims.values().map(|claim| claim.remove_claim(event_program));
     for msg in remove_claims {
         focus.send(msg).await.ok();
     }
 
     focus.send(Focus::RemoveClaim(our_program_id)).await.ok();
+}
+
+///
+/// Deals with mapping and dispatching focus events to the regions defined in the pie dialog program
+///
+pub async fn pie_dialog_focus_event_program(input: InputStream<FocusEvent>, context: SceneContext, focus_programs: BindRef<Arc<HashMap<ControlId, PieFocusRegion>>>, pie_mapping: PieDialogPointMapping) {
+    // Store event streams for target programs
+    let mut pointer_events  = HashMap::new();
+    let mut keyboard_events = HashMap::new();
+
+    // Process input events
+    let mut input = input;
+    while let Some(evt) = input.next().await {
+        match evt {
+            FocusEvent::Pointer(FocusPointerEvent::Pointer(Some(control_id), action, pointer_id, pointer_state)) => {
+                // Get the target for these events (discard the event if we can't connect)
+                let event_target = pointer_events.entry(control_id)
+                    .or_insert_with(|| {
+                        let focus_programs  = focus_programs.get();
+                        let control_claim   = focus_programs.get(&control_id)?;
+
+                        context.send(control_claim.target).ok()
+                    });
+                let Some(event_target) = event_target.as_mut() else { continue };
+
+                // Map the coordinates for the pointer event
+                let mut pointer_state = pointer_state;
+                pointer_state.location_in_canvas = pointer_state.location_in_canvas.map(|(x, y)| {
+                    let UiPoint(x, y) = pie_mapping.unmap_point(&UiPoint(x, y));
+                    (x, y)
+                });
+
+                // Send the pointer event on
+                event_target.send(FocusPointerEvent::Pointer(Some(control_id), action, pointer_id, pointer_state)).await.ok();
+            },
+
+            FocusEvent::Pointer(FocusPointerEvent::Drop(_, _)) => {
+                // TODO: not sure how to deal with these events
+            }
+
+            FocusEvent::Pointer(FocusPointerEvent::Hover(_, _)) => {
+                // TODO: not sure how to deal with these events
+            }
+
+            FocusEvent::Keyboard(FocusKeyboardEvent::Focused(control_id)) => {
+                // Get the target for these events (discard the event if we can't connect)
+                let event_target = keyboard_events.entry(control_id)
+                    .or_insert_with(|| {
+                        let focus_programs  = focus_programs.get();
+                        let control_claim   = focus_programs.get(&control_id)?;
+
+                        context.send(control_claim.target).ok()
+                    });
+                let Some(event_target) = event_target.as_mut() else { continue };
+
+                // Forward the event
+                event_target.send(FocusKeyboardEvent::Focused(control_id)).await.ok();
+            },
+
+            FocusEvent::Keyboard(FocusKeyboardEvent::Unfocused(control_id)) => {
+                // Get the target for these events (discard the event if we can't connect)
+                let event_target = keyboard_events.entry(control_id)
+                    .or_insert_with(|| {
+                        let focus_programs  = focus_programs.get();
+                        let control_claim   = focus_programs.get(&control_id)?;
+
+                        context.send(control_claim.target).ok()
+                    });
+                let Some(event_target) = event_target.as_mut() else { continue };
+
+                // Forward the event
+                event_target.send(FocusKeyboardEvent::Unfocused(control_id)).await.ok();
+            },
+
+            FocusEvent::Keyboard(FocusKeyboardEvent::KeyDown(Some(control_id), key_code, key)) => {
+                // Get the target for these events (discard the event if we can't connect)
+                let event_target = keyboard_events.entry(control_id)
+                    .or_insert_with(|| {
+                        let focus_programs  = focus_programs.get();
+                        let control_claim   = focus_programs.get(&control_id)?;
+
+                        context.send(control_claim.target).ok()
+                    });
+                let Some(event_target) = event_target.as_mut() else { continue };
+
+                // Forward the event
+                event_target.send(FocusKeyboardEvent::KeyDown(Some(control_id), key_code, key)).await.ok();
+            },
+
+            FocusEvent::Keyboard(FocusKeyboardEvent::KeyUp(Some(control_id), key_code, key)) => {
+                // Get the target for these events (discard the event if we can't connect)
+                let event_target = keyboard_events.entry(control_id)
+                    .or_insert_with(|| {
+                        let focus_programs  = focus_programs.get();
+                        let control_claim   = focus_programs.get(&control_id)?;
+
+                        context.send(control_claim.target).ok()
+                    });
+                let Some(event_target) = event_target.as_mut() else { continue };
+
+                // Forward the event
+                event_target.send(FocusKeyboardEvent::KeyUp(Some(control_id), key_code, key)).await.ok();
+            },
+
+            FocusEvent::Pointer(FocusPointerEvent::Pointer(None, _, _, _)) => {
+                // Ignore events for the background
+            },
+
+            FocusEvent::Keyboard(FocusKeyboardEvent::KeyDown(None, _, _)) => {
+                // Do nothing if there's no control
+            },
+
+            FocusEvent::Keyboard(FocusKeyboardEvent::KeyUp(None, _, _)) => {
+                // Do nothing if there's no control
+            },
+
+            FocusEvent::Window(_) => {
+                // Window events aren't forwarded
+            },
+        }
+    }
 }
