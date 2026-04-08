@@ -3,6 +3,7 @@ use crate::util::*;
 use flo_draw::canvas::*;
 use flo_curves::*;
 use flo_curves::bezier::*;
+use flo_curves::bezier::path::*;
 
 use futures::prelude::*;
 
@@ -98,5 +99,16 @@ impl PieDialogPointMapping {
         });
 
         redrawn.collect::<_>().await
+    }
+
+    ///
+    /// Transforms a single path to the coordinate scheme of the pie slice
+    ///
+    pub fn transform_path<TPath>(&self, path: TPath) -> Option<TPath>
+    where 
+        TPath:          BezierPathFactory,
+        TPath::Point:   Coordinate + Coordinate2D,
+    {
+        distort_path(&path, |point, _, _| self.map_point(&point), 1.0, 0.1)
     }
 }
