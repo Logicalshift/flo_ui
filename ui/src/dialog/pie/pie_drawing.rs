@@ -62,11 +62,14 @@ pub async fn pie_dialog_drawing_program(
     let mut input = stream::iter([PieDrawingUpdate::UpdatePosition, PieDrawingUpdate::UpdateDrawing, PieDrawingUpdate::UpdateAnimation]).chain(input);
 
     // Note: calling 'when_changed' before retrieving the new value is important to avoid a race condition where the change arrives after we've retrieved it
+    let mut drawing_lifetime    = None;
+    let mut position_lifetime   = None;
+
     while let Some(update) = input.next().await {
         match update {
             PieDrawingUpdate::UpdateDrawing => {
                 // Request a new update when the program changes
-                drawing.when_changed(NotifySubprogram::send(PieDrawingUpdate::UpdateDrawing, &context, our_program_id));
+                drawing_lifetime = Some(drawing.when_changed(NotifySubprogram::send(PieDrawingUpdate::UpdateDrawing, &context, our_program_id)));
 
                 // Build a request to send to the drawing request program
                 let slice_drawing   = drawing.get();
@@ -95,7 +98,7 @@ pub async fn pie_dialog_drawing_program(
 
             PieDrawingUpdate::UpdatePosition => {
                 // This fires when the position changes
-                position.when_changed(NotifySubprogram::send(PieDrawingUpdate::UpdatePosition, &context, our_program_id));
+                position_lifetime = Some(position.when_changed(NotifySubprogram::send(PieDrawingUpdate::UpdatePosition, &context, our_program_id)));
 
                 // Read the position
                 let (center, angle) = position.get();
@@ -125,4 +128,8 @@ pub async fn pie_dialog_drawing_program(
             },
         }
     }
+
+    // Done listening for events
+    drop(drawing_lifetime.take());
+    drop(position_lifetime.take());
 }

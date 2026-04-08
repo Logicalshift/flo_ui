@@ -127,6 +127,10 @@ pub async fn pie_dialog_focus_program(
     // Wait for an idle message before starting to update the focus, so things are settled when we process our first messages
     context.wait_for_idle(10).await;
 
+    let mut region_lifetime     = None;
+    let mut radius_lifetime     = None;
+    let mut position_lifetime   = None;
+
     while let Some(msg) = input.next().await {
         match msg {
             PieFocusUpdate::UpdateRegions => {
@@ -134,7 +138,7 @@ pub async fn pie_dialog_focus_program(
                 context.wait_for_idle(10).await;
 
                 // Send the message when this value changes in the future
-                focus_programs.when_changed(NotifySubprogram::send(PieFocusUpdate::UpdateRegions, &context, our_program_id));
+                region_lifetime = Some(focus_programs.when_changed(NotifySubprogram::send(PieFocusUpdate::UpdateRegions, &context, our_program_id)));
 
                 // We'll send all of the update messages once we're finished processing the focus messages
                 let mut focus_messages = vec![];
@@ -204,7 +208,7 @@ pub async fn pie_dialog_focus_program(
 
             PieFocusUpdate::UpdateRadius => {
                 // Notify whenever the radius changes
-                pie_radius.when_changed(NotifySubprogram::send(PieFocusUpdate::UpdateRadius, &context, our_program_id));
+                radius_lifetime = Some(pie_radius.when_changed(NotifySubprogram::send(PieFocusUpdate::UpdateRadius, &context, our_program_id)));
 
                 let (inner_radius, outer_radius)    = pie_radius.get();
                 let (center, angle)                 = position.get();
@@ -242,7 +246,7 @@ pub async fn pie_dialog_focus_program(
                 context.wait_for_idle(10).await;
 
                 // Send this message when the position changes in the future
-                position.when_changed(NotifySubprogram::send(PieFocusUpdate::UpdatePosition, &context, our_program_id));
+                position_lifetime = Some(position.when_changed(NotifySubprogram::send(PieFocusUpdate::UpdatePosition, &context, our_program_id)));
 
                 // Fetch the position
                 let (center, angle) = position.get();
@@ -268,4 +272,9 @@ pub async fn pie_dialog_focus_program(
             },
         }
     }
+
+    // Done listening for events
+    drop(region_lifetime);
+    drop(radius_lifetime);
+    drop(position_lifetime);
 }
