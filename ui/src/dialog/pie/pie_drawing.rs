@@ -35,8 +35,8 @@ pub async fn pie_dialog_drawing_program(
     drawing:            impl Into<BindRef<Arc<Vec<Draw>>>>, 
     center:             impl Into<BindRef<UiPoint>>, 
     angle:              impl Into<BindRef<f64>>, 
-    open_anim:          impl Into<BindRef<(PieAnimation, f64)>>)
-{
+    open_anim:          impl Into<BindRef<(PieAnimation, f64)>>,
+) {
     let Some(our_program_id) = context.current_program_id() else { return; };
 
     // Convert the bindings
