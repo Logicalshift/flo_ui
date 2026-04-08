@@ -277,4 +277,12 @@ pub async fn pie_dialog_focus_program(
     drop(region_lifetime);
     drop(radius_lifetime);
     drop(position_lifetime);
+
+    // Release all the claims
+    let remove_claims = claims.values().map(|claim| claim.remove_claim());
+    for msg in remove_claims {
+        focus.send(msg).await.ok();
+    }
+
+    focus.send(Focus::RemoveClaim(our_program_id)).await.ok();
 }
