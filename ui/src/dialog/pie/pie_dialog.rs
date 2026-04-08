@@ -1,6 +1,7 @@
 use super::drawing_binding::*;
 use super::pie_animation::*;
 use super::pie_drawing::*;
+use super::pie_focus::*;
 use super::point_mapping::*;
 use crate::subprograms::*;
 use crate::util::*;
@@ -15,6 +16,7 @@ use futures::prelude::*;
 use futures::channel::mpsc;
 
 use std::f64;
+use std::collections::*;
 use std::sync::*;
 
 ///
@@ -51,6 +53,9 @@ pub struct PieDialogProgram {
 
     /// The layer where this pie slice is rendered
     layer:          LayerId,
+
+    /// The z-index for this dialog (as supplied to Focus)
+    z_index:        usize,
 }
 
 impl Default for PieDialogProgram {
@@ -66,6 +71,7 @@ impl Default for PieDialogProgram {
             width:          100.0,
             title:          String::default(),
             has_detail:     false,
+            z_index:        500,
         }
     }
 }
@@ -175,6 +181,15 @@ impl PieDialogProgram {
     }
 
     ///
+    /// The Focus z-index for this dialog (used when the dialog overlaps other controls)
+    ///
+    #[inline]
+    pub fn with_z_index(mut self, new_z_index: usize) -> Self {
+        self.z_index = new_z_index;
+        self
+    }
+
+    ///
     /// Retrieves the mapping type for this program (which can be used to find how points map onto the pie layer)
     ///
     #[inline]
@@ -223,13 +238,15 @@ impl PieDialogProgram {
             let original_angle  = self.angle;
 
             // Binding for the instructions used to redraw the pie slice (coordinates transformed)
-            let draw_binding = bind(Arc::<Vec<Draw>>::new(vec![]));
+            let draw_binding    = bind(Arc::<Vec<Draw>>::new(vec![]));
+            let focus_claims    = bind(Arc::new(HashMap::new()));
 
             // Current position is used to calculate the layer transform
             let center      = bind(original_center);
             let angle       = bind(original_angle);
 
             // Title is rendered at the outer radius
+            let inner_radius = bind(self.inner_radius);
             let outer_radius = bind(self.outer_radius);
             let title        = bind(self.title.clone());
 
@@ -264,7 +281,28 @@ impl PieDialogProgram {
                     draw_animation
                 ), 3)).await.ok();
 
+            // Tell SceneControl to create a subprogram to manage the focus regions of the slice
+            let focus_focus_claims  = focus_claims.clone();
+            let focus_center        = center.clone();
+            let focus_angle         = angle.clone();
+            let focus_inner_radius  = inner_radius.clone();
+            let focus_outer_radius  = outer_radius.clone();
+            let focus_z_index       = self.z_index;
+            context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input, context|
+                pie_dialog_focus_program(
+                    input,
+                    context,
+                    focus_focus_claims,
+                    focus_center,
+                    focus_angle,
+                    focus_inner_radius,
+                    focus_outer_radius,
+                    focus_z_index,
+                ), 3)).await.ok();
+
             // Process the input
+            let point_mapping       = self.point_mapping();
+
             let mut input           = input;
             let mut send_drawing    = send_drawing;
 
@@ -290,9 +328,25 @@ impl PieDialogProgram {
                     },
 
                     PieDialog::ClaimRegion { program, region, control, z_index } => {
-                        // Need to transform/recalculate the path and then add to the claims
-                        // (Also need a subprogram to manage them)
-                        // todo!()
+                        // Transform the region
+                        let region = region.into_iter()
+                            .flat_map(|path| point_mapping.transform_path(path))
+                            .collect::<Vec<_>>();
+
+                        // Read the existing regions
+                        let existing_regions        = focus_claims.get();
+                        let mut existing_regions    = Arc::unwrap_or_clone(existing_regions);
+
+                        // Add a new region
+                        existing_regions.insert(control.clone(), PieFocusRegion { 
+                            path:       region, 
+                            control:    control, 
+                            target:     program, 
+                            z_index:    z_index 
+                        });
+
+                        // Update the binding (the subprogram will pick this up later on)
+                        focus_claims.set(Arc::new(existing_regions));
                     },
 
                     PieDialog::Close => {

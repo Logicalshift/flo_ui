@@ -20,7 +20,7 @@ use std::sync::*;
 ///
 /// Describes a focus region in a pie program
 ///
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct PieFocusRegion {
     /// The path for this region
     pub (super) path: Vec<UiPath>,
@@ -92,7 +92,7 @@ impl PieFocusRegion {
 ///
 /// Tells the Focus program where the controls in a pie slice are located
 ///
-pub async fn pie_focus_program(
+pub async fn pie_dialog_focus_program(
     input:              InputStream<PieFocusUpdate>, 
     context:            SceneContext, 
     focus_programs:     impl Into<BindRef<Arc<HashMap<ControlId, PieFocusRegion>>>>,     
