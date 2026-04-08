@@ -1,3 +1,4 @@
+use super::point_mapping::*;
 use crate::subprograms::*;
 use crate::util::*;
 
@@ -95,6 +96,7 @@ impl PieFocusRegion {
 pub async fn pie_dialog_focus_program(
     input:              InputStream<PieFocusUpdate>, 
     context:            SceneContext, 
+    pie_mapping:        PieDialogPointMapping,
     focus_programs:     impl Into<BindRef<Arc<HashMap<ControlId, PieFocusRegion>>>>,     
     center:             impl Into<BindRef<UiPoint>>, 
     angle:              impl Into<BindRef<f64>>,

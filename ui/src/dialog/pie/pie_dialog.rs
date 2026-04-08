@@ -292,6 +292,7 @@ impl PieDialogProgram {
                 pie_dialog_focus_program(
                     input,
                     context,
+                    point_mapping,
                     focus_focus_claims,
                     focus_center,
                     focus_angle,
