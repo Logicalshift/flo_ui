@@ -5,11 +5,15 @@ use flo_binding::*;
 use flo_scene::*;
 use flo_scene_binding::*;
 use flo_draw::canvas::*;
+use flo_curves::arc::*;
+use flo_curves::line::*;
+use flo_curves::bezier::*;
 use flo_curves::bezier::path::*;
 
 use futures::prelude::*;
 use serde::*;
 
+use std::f64;
 use std::collections::*;
 use std::sync::*;
 
@@ -37,6 +41,7 @@ pub struct PieFocusRegion {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum PieFocusUpdate {
     UpdateRegions,
+    UpdateRadius,
     UpdatePosition,
 }
 
@@ -93,6 +98,9 @@ pub async fn pie_focus_program(
     focus_programs:     impl Into<BindRef<Arc<HashMap<ControlId, PieFocusRegion>>>>,     
     center:             impl Into<BindRef<UiPoint>>, 
     angle:              impl Into<BindRef<f64>>,
+    inner_radius:       impl Into<BindRef<f64>>,
+    outer_radius:       impl Into<BindRef<f64>>,
+    pie_z_index:        usize,
 ) {
     let Some(our_program_id) = context.current_program_id() else { return; };
 
@@ -103,11 +111,17 @@ pub async fn pie_focus_program(
     let focus_programs  = focus_programs.into();
     let center          = center.into();
     let angle           = angle.into();
+    let inner_radius    = inner_radius.into();
+    let outer_radius    = outer_radius.into();
 
     let position        = computed(move || (center.get(), angle.get()));
+    let pie_radius      = computed(move || (inner_radius.get(), outer_radius.get()));
+
+    // The paths making up the main 'slice' of the focus program
+    let mut slice       = vec![];
 
     // Always set up by updating the position and regions first
-    let mut input       = stream::iter([PieFocusUpdate::UpdatePosition, PieFocusUpdate::UpdateRegions]).chain(input);
+    let mut input       = stream::iter([PieFocusUpdate::UpdateRadius, PieFocusUpdate::UpdatePosition, PieFocusUpdate::UpdateRegions]).chain(input);
     let Ok(mut focus)   = context.send(()) else { return; };
 
     // Wait for an idle message before starting to update the focus, so things are settled when we process our first messages
@@ -188,6 +202,41 @@ pub async fn pie_focus_program(
                 }
             },
 
+            PieFocusUpdate::UpdateRadius => {
+                // Notify whenever the radius changes
+                pie_radius.when_changed(NotifySubprogram::send(PieFocusUpdate::UpdateRadius, &context, our_program_id));
+
+                let (inner_radius, outer_radius)    = pie_radius.get();
+                let (center, angle)                 = position.get();
+
+                // Create the slice path
+                let inner_arc = Circle::new(UiPoint(0.0, 0.0), inner_radius);
+                let inner_arc = inner_arc.arc(-f64::consts::PI/4.0, f64::consts::PI/4.0).to_bezier_curve::<Curve<UiPoint>>();
+                let outer_arc = Circle::new(UiPoint(0.0, 0.0), outer_radius);
+                let outer_arc = outer_arc.arc(-f64::consts::PI/4.0, f64::consts::PI/4.0).to_bezier_curve::<Curve<UiPoint>>();
+
+                let path = vec![
+                    inner_arc.clone(),
+                    line_to_bezier(&(inner_arc.end_point(), outer_arc.end_point())),
+                    outer_arc.reverse(),
+                    line_to_bezier(&(outer_arc.start_point(), inner_arc.start_point())),
+                ];
+                let path = UiPath::from_curves(&path);
+
+                slice = vec![path];
+
+                // Generate the 'background' slice for this dialog
+                let transform = Transform2D::translate(center.x() as _, center.y() as _) * Transform2D::rotate(angle as _);
+
+                let background_slice = Focus::ClaimRegion { 
+                    program:    our_program_id, 
+                    region:     slice.iter().map(|path| path.map_points(|UiPoint(x, y)| { let (x, y) = transform.transform_point(x as _, y as _); UiPoint(x as _, y as _) })).collect(), 
+                    z_index:    pie_z_index,
+                };
+
+                focus.send(background_slice).await.ok();
+            }
+
             PieFocusUpdate::UpdatePosition => {
                 // Wait for the scene to become idle so we don't process/send too many updates at once
                 context.wait_for_idle(10).await;
@@ -205,6 +254,17 @@ pub async fn pie_focus_program(
                 for msg in focus_messages {
                     focus.send(msg).await.ok();
                 }
+
+                // Update the 'background' slice for this dialog
+                let transform = Transform2D::translate(center.x() as _, center.y() as _) * Transform2D::rotate(angle as _);
+
+                let background_slice = Focus::ClaimRegion { 
+                    program:    our_program_id, 
+                    region:     slice.iter().map(|path| path.map_points(|UiPoint(x, y)| { let (x, y) = transform.transform_point(x as _, y as _); UiPoint(x as _, y as _) })).collect(), 
+                    z_index:    pie_z_index,
+                };
+
+                focus.send(background_slice).await.ok();
             },
         }
     }
