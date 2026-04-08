@@ -6,11 +6,15 @@ use flo_draw::canvas::*;
 use flo_draw::canvas::scenery::*;
 use flo_scene::*;
 use flo_scene_binding::*;
+use flo_curves::arc::*;
+use flo_curves::line::*;
+use flo_curves::bezier::*;
 
 use futures::prelude::*;
 use serde::*;
 
 use std::sync::*;
+use std::f64;
 
 ///
 /// Actions that can result from a binding changing
@@ -36,14 +40,20 @@ pub async fn pie_dialog_drawing_program(
     center:             impl Into<BindRef<UiPoint>>, 
     angle:              impl Into<BindRef<f64>>, 
     open_anim:          impl Into<BindRef<(PieAnimation, f64)>>,
+    inner_radius:       impl Into<BindRef<f64>>,
+    outer_radius:       impl Into<BindRef<f64>>,
 ) {
     let Some(our_program_id) = context.current_program_id() else { return; };
 
     // Convert the bindings
-    let drawing     = drawing.into();
-    let center      = center.into();
-    let angle       = angle.into();
-    let open_anim   = open_anim.into();
+    let drawing      = drawing.into();
+    let center       = center.into();
+    let angle        = angle.into();
+    let open_anim    = open_anim.into();
+    let inner_radius = inner_radius.into();
+    let outer_radius = outer_radius.into();
+
+    let slice_drawing = computed(move || (drawing.get(), inner_radius.get(), outer_radius.get()));
 
     // We keep track of the transform we're applying to the layer
     let mut layer_transform     = Transform2D::identity();
@@ -69,12 +79,12 @@ pub async fn pie_dialog_drawing_program(
         match update {
             PieDrawingUpdate::UpdateDrawing => {
                 // Request a new update when the program changes
-                drawing_lifetime = Some(drawing.when_changed(NotifySubprogram::send(PieDrawingUpdate::UpdateDrawing, &context, our_program_id)));
+                drawing_lifetime = Some(slice_drawing.when_changed(NotifySubprogram::send(PieDrawingUpdate::UpdateDrawing, &context, our_program_id)));
 
                 // Build a request to send to the drawing request program
-                let slice_drawing   = drawing.get();
+                let (slice_drawing, inner_radius, outer_radius) = slice_drawing.get();
 
-                let mut drawing     = vec![];
+                let mut drawing = vec![];
                 drawing.push_state();
 
                 // Clear out the layer and reset it
@@ -83,7 +93,28 @@ pub async fn pie_dialog_drawing_program(
                 drawing.clear_layer();
                 drawing.set_layer_transform(layer_transform * animation_transform);
 
-                // TODO: draw the background of the slice
+                // Draw the background of the slice
+                let inner_arc = Circle::new(UiPoint(0.0, 0.0), inner_radius);
+                let inner_arc = inner_arc.arc(-f64::consts::PI/4.0, f64::consts::PI/4.0).to_bezier_curve::<Curve<UiPoint>>();
+                let outer_arc = Circle::new(UiPoint(0.0, 0.0), outer_radius);
+                let outer_arc = outer_arc.arc(-f64::consts::PI/4.0, f64::consts::PI/4.0).to_bezier_curve::<Curve<UiPoint>>();
+
+                let path = vec![
+                    inner_arc.clone(),
+                    line_to_bezier(&(inner_arc.end_point(), outer_arc.end_point())),
+                    outer_arc.reverse(),
+                    line_to_bezier(&(outer_arc.start_point(), inner_arc.start_point())),
+                ];
+                let pie_slice = UiPath::from_curves(&path);
+
+                drawing.new_path();
+                drawing.bezier_path(&pie_slice);
+
+                drawing.line_width_pixels(1.0);
+                drawing.stroke_color(Color::Rgba(0.3, 0.6, 0.7, 0.9));
+                drawing.fill_color(Color::Rgba(0.85, 0.95, 1.0, 0.95));
+                drawing.fill();
+                drawing.stroke();
 
                 // Draw the contents of the slice
                 drawing.extend(slice_drawing.iter().cloned());

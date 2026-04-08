@@ -267,9 +267,11 @@ impl PieDialogProgram {
                 pie_dialog_drawing_binding_program(input, context, update_draw_binding, point_mapping, with_glyph_paths), 1)).await.ok();
 
             // Tell SceneControl to create a subprogram to perform the actual rendering of the slice
-            let draw_center     = center.clone();
-            let draw_angle      = angle.clone();
-            let draw_animation  = animation.clone();
+            let draw_center       = center.clone();
+            let draw_angle        = angle.clone();
+            let draw_animation    = animation.clone();
+            let draw_inner_radius = inner_radius.clone();
+            let draw_outer_radius = outer_radius.clone();
             context.send_message(SceneControl::start_child_program(SubProgramId::new(), our_program_id, move |input, context|
                  pie_dialog_drawing_program(
                     input, 
@@ -278,7 +280,9 @@ impl PieDialogProgram {
                     draw_binding, 
                     draw_center, 
                     draw_angle,
-                    draw_animation
+                    draw_animation,
+                    draw_inner_radius,
+                    draw_outer_radius
                 ), 3)).await.ok();
 
             // Tell SceneControl to create a subprogram to manage the focus regions of the slice
