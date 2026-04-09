@@ -2,16 +2,16 @@ use uuid::*;
 use ::serde::*;
 
 ///
-/// Identifier used to specify a control in the Focus program
+/// Identifier used to specify a region within the Focus program
 ///
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ControlId(Uuid);
+pub struct RegionId(Uuid);
 
-impl ControlId {
+impl RegionId {
     ///
-    /// Creates a unique new control ID
+    /// Creates a unique new region ID
     ///
     pub fn new() -> Self {
-        ControlId(Uuid::new_v4())
+        RegionId(Uuid::new_v4())
     }
 }
