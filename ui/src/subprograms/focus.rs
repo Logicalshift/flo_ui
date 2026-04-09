@@ -30,18 +30,18 @@ pub enum Focus {
     /// An update from the scene (used to track when subprograms go away)
     Update(SceneUpdate),
 
-    /// Sets the subprogram that should process keyboard events
-    SetKeyboardFocus(SubProgramId, ControlId),
+    /// Sets which region/control should receive keyboard events
+    SetKeyboardFocus(RegionId, ControlId),
 
-    /// Sets which control should receive keyboard focus after the specified control (within a subprogram, which might have several controls)
+    /// Sets which control should receive keyboard focus after the specified control (within a region, which might have several controls)
     ///
     /// This moves the first control so that it's ordered before the second control (new controls are added at the end of the list)
-    SetFollowingControl(SubProgramId, ControlId, ControlId),
+    SetFollowingControl(RegionId, ControlId, ControlId),
 
-    /// Sets which subprogram should receive keyboard focus after reaching the end of the controls in the first subprogram 
+    /// Sets which region should receive keyboard focus after reaching the end of the controls in the first region
     ///
-    /// This moves the first subprogram so that it's ordered before the second program (new subprograms are added at the end of the list)
-    SetFollowingSubProgram(SubProgramId, SubProgramId),
+    /// This moves the first region so that it's ordered before the second region (new regions are added at the end of the list)
+    SetFollowingRegion(RegionId, RegionId),
 
     /// Move keyboard focus to the next control
     FocusNext,

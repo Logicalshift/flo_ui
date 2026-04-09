@@ -25,12 +25,12 @@ pub async fn focus(input: InputStream<Focus>, context: SceneContext) {
         canvas_program:             None,
         subprogram_space:           None,
         region_data:                HashMap::new(),
-        subprogram_order:           vec![],
+        region_order:               vec![],
         pointer_target:             None,
         pointer_target_program:     None,
         pointer_target_control:     None,
         button_state:               ButtonState::new(),
-        focused_subprogram:         None,
+        focused_region:             None,
         focused_control:            None,
         focused_event_target:       None,
         tab_ordering:               HashMap::new(),
@@ -65,9 +65,9 @@ pub async fn focus(input: InputStream<Focus>, context: SceneContext) {
             Update(_)                                   => { }
 
             // Keyboard handling
-            SetKeyboardFocus(program_id, control_id)                        => focus.set_keyboard_focus(program_id, control_id, &context).await,
-            SetFollowingControl(program_id, control_id, next_control_id)    => focus.set_following_control(program_id, control_id, next_control_id).await,
-            SetFollowingSubProgram(program_id, next_program_id)             => focus.set_following_subprogram(program_id, next_program_id).await,
+            SetKeyboardFocus(region_id, control_id)                         => focus.set_keyboard_focus(region_id, control_id, &context).await,
+            SetFollowingControl(region_id, control_id, next_control_id)     => focus.set_following_control(region_id, control_id, next_control_id).await,
+            SetFollowingRegion(region_id, next_region_id)                   => focus.set_following_region(region_id, next_region_id).await,
             FocusNext                                                       => focus.focus_next(&context).await,
             FocusPrevious                                                   => focus.focus_previous(&context).await,
 

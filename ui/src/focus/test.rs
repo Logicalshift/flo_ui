@@ -46,12 +46,15 @@ fn focus_following_control() {
 
     println!("1 = {:?}, 2 = {:?}, 3 = {:?}, 4 = {:?}", control_1, control_2, control_3, control_4);
 
-    TestBuilder::new()
-        .send_message(Focus::SetFollowingControl(test_program, control_1, control_2))
-        .send_message(Focus::SetFollowingControl(test_program, control_2, control_3))
-        .send_message(Focus::SetFollowingControl(test_program, control_3, control_4))
+    let region = RegionId::new();
 
-        .send_message(Focus::SetKeyboardFocus(test_program, control_1))
+    TestBuilder::new()
+        .send_message(Focus::ClaimRegion { region_id: region, program: test_program, region: vec![], z_index: 0 })
+        .send_message(Focus::SetFollowingControl(region, control_1, control_2))
+        .send_message(Focus::SetFollowingControl(region, control_2, control_3))
+        .send_message(Focus::SetFollowingControl(region, control_3, control_4))
+
+        .send_message(Focus::SetKeyboardFocus(region, control_1))
         .expect_message(move |evt: FocusEvent| expect_focus(evt, control_1, 1))
         .send_message(Focus::FocusNext)
         .expect_message(move |evt: FocusEvent| expect_unfocus(evt, control_1, 1))
@@ -77,12 +80,15 @@ fn focus_previous_control() {
 
     println!("1 = {:?}, 2 = {:?}, 3 = {:?}, 4 = {:?}", control_1, control_2, control_3, control_4);
 
-    TestBuilder::new()
-        .send_message(Focus::SetFollowingControl(test_program, control_1, control_2))
-        .send_message(Focus::SetFollowingControl(test_program, control_2, control_3))
-        .send_message(Focus::SetFollowingControl(test_program, control_3, control_4))
+    let region = RegionId::new();
 
-        .send_message(Focus::SetKeyboardFocus(test_program, control_4))
+    TestBuilder::new()
+        .send_message(Focus::ClaimRegion { region_id: region, program: test_program, region: vec![], z_index: 0 })
+        .send_message(Focus::SetFollowingControl(region, control_1, control_2))
+        .send_message(Focus::SetFollowingControl(region, control_2, control_3))
+        .send_message(Focus::SetFollowingControl(region, control_3, control_4))
+
+        .send_message(Focus::SetKeyboardFocus(region, control_4))
         .expect_message(move |evt: FocusEvent| expect_focus(evt, control_4, 4))
         .send_message(Focus::FocusPrevious)
         .expect_message(move |evt: FocusEvent| expect_unfocus(evt, control_4, 4))
@@ -108,12 +114,15 @@ fn focus_previous_control_makes_loop() {
 
     println!("1 = {:?}, 2 = {:?}, 3 = {:?}, 4 = {:?}", control_1, control_2, control_3, control_4);
 
-    TestBuilder::new()
-        .send_message(Focus::SetFollowingControl(test_program, control_1, control_2))
-        .send_message(Focus::SetFollowingControl(test_program, control_2, control_3))
-        .send_message(Focus::SetFollowingControl(test_program, control_3, control_4))
+    let region = RegionId::new();
 
-        .send_message(Focus::SetKeyboardFocus(test_program, control_4))
+    TestBuilder::new()
+        .send_message(Focus::ClaimRegion { region_id: region, program: test_program, region: vec![], z_index: 0 })
+        .send_message(Focus::SetFollowingControl(region, control_1, control_2))
+        .send_message(Focus::SetFollowingControl(region, control_2, control_3))
+        .send_message(Focus::SetFollowingControl(region, control_3, control_4))
+
+        .send_message(Focus::SetKeyboardFocus(region, control_4))
         .expect_message(move |evt: FocusEvent| expect_focus(evt, control_4, 4))
         .send_message(Focus::FocusPrevious)
         .expect_message(move |evt: FocusEvent| expect_unfocus(evt, control_4, 4))
@@ -142,12 +151,15 @@ fn focus_following_control_makes_loop() {
 
     println!("1 = {:?}, 2 = {:?}, 3 = {:?}, 4 = {:?}", control_1, control_2, control_3, control_4);
 
-    TestBuilder::new()
-        .send_message(Focus::SetFollowingControl(test_program, control_1, control_2))
-        .send_message(Focus::SetFollowingControl(test_program, control_2, control_3))
-        .send_message(Focus::SetFollowingControl(test_program, control_3, control_4))
+    let region = RegionId::new();
 
-        .send_message(Focus::SetKeyboardFocus(test_program, control_1))
+    TestBuilder::new()
+        .send_message(Focus::ClaimRegion { region_id: region, program: test_program, region: vec![], z_index: 0 })
+        .send_message(Focus::SetFollowingControl(region, control_1, control_2))
+        .send_message(Focus::SetFollowingControl(region, control_2, control_3))
+        .send_message(Focus::SetFollowingControl(region, control_3, control_4))
+
+        .send_message(Focus::SetKeyboardFocus(region, control_1))
         .expect_message(move |evt: FocusEvent| expect_focus(evt, control_1, 1))
         .send_message(Focus::FocusNext)
         .expect_message(move |evt: FocusEvent| expect_unfocus(evt, control_1, 1))

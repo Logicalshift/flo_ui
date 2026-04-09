@@ -39,20 +39,20 @@ pub (super) struct FocusProgram {
     /// State of the mouse buttons
     pub (super) button_state: ButtonState,
 
-    /// The subprogram that currently has keyboard focus
-    pub (super) focused_subprogram: Option<SubProgramId>,
+    /// The region that currently has keyboard focus
+    pub (super) focused_region: Option<RegionId>,
 
-    /// The control within the subprogram that has keyboard focus
+    /// The control within the region that has keyboard focus
     pub (super) focused_control: Option<ControlId>,
 
     /// Where keyboard events should be sent
     pub (super) focused_event_target: Option<OutputSink<FocusKeyboardEvent>>,
 
-    /// The tab ordering for the controls within this program
-    pub (super) tab_ordering: HashMap<SubProgramId, KeyboardSubProgram>,
+    /// The tab ordering for the controls within each region
+    pub (super) tab_ordering: HashMap<RegionId, KeyboardSubProgram>,
 
-    /// The focus order for the subprograms
-    pub (super) subprogram_order: Vec<SubProgramId>,
+    /// The focus order for regions
+    pub (super) region_order: Vec<RegionId>,
 
     /// The bounding box of the window (None if this has not been sent to us)
     pub (super) bounds: Option<(f64, f64)>,
@@ -101,126 +101,149 @@ impl FocusProgram {
     }
 
     ///
-    /// Sets keyboard focus to a specific program/control
+    /// Looks up the event_target SubProgramId for a given region/control pair
     ///
-    pub async fn set_keyboard_focus(&mut self, program_id: SubProgramId, control_id: ControlId, context: &SceneContext) {
-        // Unfocus the existing program
-        if let (Some(old_program_id), Some(old_control_id)) = (self.focused_subprogram, self.focused_control) {
-            if let Ok(mut channel) = context.send(old_program_id) {
-                channel.send(FocusKeyboardEvent::Unfocused(old_control_id)).await.ok();
+    fn find_event_target(&self, region_id: RegionId, control_id: ControlId) -> Option<SubProgramId> {
+        let region = self.region_data.get(&region_id)?;
+
+        // If there's a control with its own event_target, use that
+        if let Some(control) = region.controls.iter().find(|c| c.id == control_id) {
+            Some(control.event_target)
+        } else {
+            Some(region.event_target)
+        }
+    }
+
+    ///
+    /// Sets keyboard focus to a specific region/control
+    ///
+    pub async fn set_keyboard_focus(&mut self, region_id: RegionId, control_id: ControlId, context: &SceneContext) {
+        // Unfocus the existing region/control
+        if let (Some(old_region_id), Some(old_control_id)) = (self.focused_region, self.focused_control) {
+            let old_event_target = self.find_event_target(old_region_id, old_control_id);
+
+            if let Some(old_event_target) = old_event_target {
+                if let Ok(mut channel) = context.send(old_event_target) {
+                    channel.send(FocusKeyboardEvent::Unfocused(old_control_id)).await.ok();
+                }
             }
 
-            self.focused_subprogram  = None;
-            self.focused_control     = None;
+            self.focused_region  = None;
+            self.focused_control = None;
         }
 
-        // Update the focused control and inform the relevant program
-        if let Ok(mut channel) = context.send(program_id) {
-            self.focused_subprogram  = Some(program_id);
-            self.focused_control     = Some(control_id);
-            channel.send(FocusKeyboardEvent::Focused(control_id)).await.ok();
+        // Update the focused region/control and inform the relevant event target
+        let event_target = self.find_event_target(region_id, control_id);
 
-            self.focused_event_target = Some(channel);
+        if let Some(event_target) = event_target {
+            if let Ok(mut channel) = context.send(event_target) {
+                self.focused_region  = Some(region_id);
+                self.focused_control = Some(control_id);
+                channel.send(FocusKeyboardEvent::Focused(control_id)).await.ok();
+
+                self.focused_event_target = Some(channel);
+            } else {
+                self.focused_event_target = None;
+            }
         } else {
             self.focused_event_target = None;
         }
     }
 
     ///
-    /// Sets the following control for keyboard focus (inserting control_id before next_control_id)
+    /// Sets the following control for keyboard focus within a region (inserting control_id before next_control_id)
     ///
-    pub async fn set_following_control(&mut self, program_id: SubProgramId, control_id: ControlId, next_control_id: ControlId) {
-        // Find the subprogram for these controls
-        if !self.subprogram_order.iter().any(|prog| prog == &program_id) {
-            self.subprogram_order.push(program_id);
+    pub async fn set_following_control(&mut self, region_id: RegionId, control_id: ControlId, next_control_id: ControlId) {
+        // Ensure the region is in the ordering
+        if !self.region_order.iter().any(|r| r == &region_id) {
+            self.region_order.push(region_id);
         }
 
-        let controls_for_program = self.tab_ordering.entry(program_id)
+        let controls_for_region = self.tab_ordering.entry(region_id)
             .or_insert_with(|| KeyboardSubProgram {
                 control_order: vec![],
             });
 
         // Remove the control if it already has an order
-        controls_for_program.control_order.retain(|ctrl| ctrl != &control_id);
+        controls_for_region.control_order.retain(|ctrl| ctrl != &control_id);
 
-        // Add the first control to the end of the list for the program if it's not there already (generally this should be called with controls that already exist)
-        let before_idx = if let Some(idx) = controls_for_program.control_order.iter().position(|ctrl| ctrl == &next_control_id) {
+        // Add next_control_id to the end of the list if it's not there already
+        let before_idx = if let Some(idx) = controls_for_region.control_order.iter().position(|ctrl| ctrl == &next_control_id) {
             idx
         } else {
-            let idx = controls_for_program.control_order.len();
-            controls_for_program.control_order.push(next_control_id);
+            let idx = controls_for_region.control_order.len();
+            controls_for_region.control_order.push(next_control_id);
 
             idx
         };
 
         // Insert the control before the 'next' control
-        controls_for_program.control_order.insert(before_idx, control_id);
+        controls_for_region.control_order.insert(before_idx, control_id);
     }
 
     ///
-    /// Sets the following subprogram for keyboard focus (inserting program_id before next_program_id)
+    /// Sets the following region for keyboard focus (inserting region_id before next_region_id)
     ///
-    pub async fn set_following_subprogram(&mut self, program_id: SubProgramId, next_program_id: SubProgramId) {
-        // Ensure that the control order exists for the programs
-        self.tab_ordering.entry(program_id)
+    pub async fn set_following_region(&mut self, region_id: RegionId, next_region_id: RegionId) {
+        // Ensure that the control order exists for the regions
+        self.tab_ordering.entry(region_id)
             .or_insert_with(|| KeyboardSubProgram {
                 control_order: vec![],
             });
-        self.tab_ordering.entry(next_program_id)
+        self.tab_ordering.entry(next_region_id)
             .or_insert_with(|| KeyboardSubProgram {
                 control_order: vec![],
             });
 
-        // Remove program_id from the existing list
-        self.subprogram_order.retain(|prog| prog != &program_id);
-        
-        // Find the index to add the program ID before
-        let before_idx = if let Some(idx) = self.subprogram_order.iter().position(|prog| prog == &next_program_id) {
+        // Remove region_id from the existing list
+        self.region_order.retain(|r| r != &region_id);
+
+        // Find the index to add region_id before
+        let before_idx = if let Some(idx) = self.region_order.iter().position(|r| r == &next_region_id) {
             idx
         } else {
-            // Add next_program_id at the end of the ordering if it doesn't already exist
-            let idx = self.subprogram_order.len();
-            self.subprogram_order.push(next_program_id);
+            // Add next_region_id at the end if it doesn't already exist
+            let idx = self.region_order.len();
+            self.region_order.push(next_region_id);
 
             idx
         };
 
-        // Insert program_id before next_program_id
-        self.subprogram_order.insert(before_idx, program_id);
+        // Insert region_id before next_region_id
+        self.region_order.insert(before_idx, region_id);
     }
 
     ///
-    /// Figures out the following subprogram ID in focus order
+    /// Figures out the following region ID in focus order
     ///
-    fn next_subprogram(&self, current_program: Option<SubProgramId>) -> Option<SubProgramId> {
-        let current_program = current_program?;
-        let current_idx     = self.subprogram_order.iter().position(|prog| prog == &current_program)?;
-        let next_idx        = if current_idx+1 >= self.subprogram_order.len() { 0 } else { current_idx+1 };
+    fn next_region(&self, current_region: Option<RegionId>) -> Option<RegionId> {
+        let current_region  = current_region?;
+        let current_idx     = self.region_order.iter().position(|r| r == &current_region)?;
+        let next_idx        = if current_idx+1 >= self.region_order.len() { 0 } else { current_idx+1 };
 
-        Some(self.subprogram_order[next_idx])
+        Some(self.region_order[next_idx])
     }
 
     ///
     /// Figures out the following control
     ///
-    fn next_control(&self, current_program: Option<SubProgramId>, current_control: Option<ControlId>) -> Option<(SubProgramId, ControlId)> {
-        let current_program = current_program?;
+    fn next_control(&self, current_region: Option<RegionId>, current_control: Option<ControlId>) -> Option<(RegionId, ControlId)> {
+        let current_region  = current_region?;
         let current_control = current_control?;
 
-        // Get the data for the current control
-        let program_data    = self.tab_ordering.get(&current_program)?;
-        let control_pos     = program_data.control_order.iter().position(|ctrl| ctrl == &current_control)?;
+        // Get the data for the current region
+        let region_data = self.tab_ordering.get(&current_region)?;
+        let control_pos = region_data.control_order.iter().position(|ctrl| ctrl == &current_control)?;
 
-        // If this would loop back to the beginning then focus the next subprogram
-        if control_pos+1 >= program_data.control_order.len() {
-            let next_program_id = self.next_subprogram(Some(current_program))?;
-            let next_program    = self.tab_ordering.get(&next_program_id)?;
-            let first_control   = next_program.control_order.iter().copied().next()?;
+        // If this would loop back to the beginning then focus the next region
+        if control_pos+1 >= region_data.control_order.len() {
+            let next_region_id  = self.next_region(Some(current_region))?;
+            let next_region     = self.tab_ordering.get(&next_region_id)?;
+            let first_control   = next_region.control_order.iter().copied().next()?;
 
-            Some((next_program_id, first_control))
+            Some((next_region_id, first_control))
         } else {
-            // Just the next control in the same program
-            Some((current_program, program_data.control_order[control_pos+1]))
+            Some((current_region, region_data.control_order[control_pos+1]))
         }
     }
 
@@ -228,46 +251,44 @@ impl FocusProgram {
     /// Focuses the next control in the list
     ///
     pub async fn focus_next(&mut self, context: &SceneContext) {
-        if let Some((next_program, next_control)) = self.next_control(self.focused_subprogram, self.focused_control) {
-            // Currently focused control has a 'next'
-            self.set_keyboard_focus(next_program, next_control, context).await;
+        if let Some((next_region, next_control)) = self.next_control(self.focused_region, self.focused_control) {
+            self.set_keyboard_focus(next_region, next_control, context).await;
         } else {
-            // TODO: focus the first control in the first program
+            // TODO: focus the first control in the first region
         }
     }
 
     ///
-    /// Figures out the previous subprogram ID in focus order
+    /// Figures out the previous region ID in focus order
     ///
-    fn previous_subprogram(&self, current_program: Option<SubProgramId>) -> Option<SubProgramId> {
-        let current_program = current_program?;
-        let current_idx     = self.subprogram_order.iter().position(|prog| prog == &current_program)?;
-        let previous_idx    = if current_idx == 0 { self.subprogram_order.len()-1 } else { current_idx-1 };
+    fn previous_region(&self, current_region: Option<RegionId>) -> Option<RegionId> {
+        let current_region  = current_region?;
+        let current_idx     = self.region_order.iter().position(|r| r == &current_region)?;
+        let previous_idx    = if current_idx == 0 { self.region_order.len()-1 } else { current_idx-1 };
 
-        Some(self.subprogram_order[previous_idx])
+        Some(self.region_order[previous_idx])
     }
 
     ///
     /// Figures out the preceding control
     ///
-    fn previous_control(&self, current_program: Option<SubProgramId>, current_control: Option<ControlId>) -> Option<(SubProgramId, ControlId)> {
-        let current_program = current_program?;
+    fn previous_control(&self, current_region: Option<RegionId>, current_control: Option<ControlId>) -> Option<(RegionId, ControlId)> {
+        let current_region  = current_region?;
         let current_control = current_control?;
 
-        // Get the data for the current control
-        let program_data    = self.tab_ordering.get(&current_program)?;
-        let control_pos     = program_data.control_order.iter().position(|ctrl| ctrl == &current_control)?;
+        // Get the data for the current region
+        let region_data = self.tab_ordering.get(&current_region)?;
+        let control_pos = region_data.control_order.iter().position(|ctrl| ctrl == &current_control)?;
 
         if control_pos == 0 {
-            // Return the last control of the previous program
-            let previous_program_id = self.previous_subprogram(Some(current_program))?;
-            let previous_program    = self.tab_ordering.get(&previous_program_id)?;
-            let previous_control    = previous_program.control_order.last()?;
+            // Return the last control of the previous region
+            let previous_region_id  = self.previous_region(Some(current_region))?;
+            let previous_region     = self.tab_ordering.get(&previous_region_id)?;
+            let previous_control    = previous_region.control_order.last()?;
 
-            Some((previous_program_id, *previous_control))
+            Some((previous_region_id, *previous_control))
         } else {
-            // Retur nthe preceding control
-            Some((current_program, program_data.control_order[control_pos-1]))
+            Some((current_region, region_data.control_order[control_pos-1]))
         }
     }
 
@@ -275,11 +296,10 @@ impl FocusProgram {
     /// Focuses the previous control in the list
     ///
     pub async fn focus_previous(&mut self, context: &SceneContext) {
-        if let Some((previous_program, previous_control)) = self.previous_control(self.focused_subprogram, self.focused_control) {
-            // Currently focused control has a 'next'
-            self.set_keyboard_focus(previous_program, previous_control, context).await;
+        if let Some((previous_region, previous_control)) = self.previous_control(self.focused_region, self.focused_control) {
+            self.set_keyboard_focus(previous_region, previous_control, context).await;
         } else {
-            // TODO: focus the last control in the last program
+            // TODO: focus the last control in the last region
         }
     }
 
@@ -374,11 +394,19 @@ impl FocusProgram {
     }
 
     ///
-    /// Removes all keyboard focus tracking for the specified program
+    /// Removes all keyboard focus tracking for regions belonging to the specified program
     ///
     pub async fn remove_program_focus(&mut self, program: SubProgramId) {
-        self.tab_ordering.remove(&program);
-        self.subprogram_order.retain(|prog| prog != &program);
+        // Find all regions whose event_target matches this program
+        let regions_to_remove = self.region_data.iter()
+            .filter(|(_, region)| region.event_target == program)
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>();
+
+        for region_id in regions_to_remove {
+            self.tab_ordering.remove(&region_id);
+            self.region_order.retain(|r| r != &region_id);
+        }
     }
 
     ///
@@ -674,7 +702,7 @@ impl FocusProgram {
         // Make a list of all the subprograms we know about
         let all_subprograms = self.region_data.values()
             .map(|region| region.event_target)
-            .chain(self.subprogram_order.iter().copied())
+            .chain(self.region_data.values().flat_map(|region| region.controls.iter().map(|c| c.event_target)))
             .collect::<HashSet<_>>();
 
         // Send copies of the events to each one
