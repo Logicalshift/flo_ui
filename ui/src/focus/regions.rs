@@ -1,6 +1,8 @@
 use crate::subprograms::*;
 use crate::util::*;
 
+use flo_scene::*;
+
 use flo_curves::geo::*;
 use flo_curves::bezier::rasterize::*;
 use flo_curves::bezier::vectorize::*;
@@ -9,20 +11,22 @@ use flo_curves::bezier::vectorize::*;
 /// Represents a control within a subprogram
 ///
 pub (super) struct SubProgramControl {
-    pub (super) id:         ControlId,
-    pub (super) bounds:     Bounds<UiPoint>,
-    pub (super) region:     PathContour,
-    pub (super) z_index:    usize,
+    pub (super) id:             ControlId,
+    pub (super) event_target:   SubProgramId,
+    pub (super) bounds:         Bounds<UiPoint>,
+    pub (super) region:         PathContour,
+    pub (super) z_index:        usize,
 }
 
 ///
 /// Definition for a region of the canvas where a subprogram owns the events
 ///
 pub (super) struct SubProgramRegion {
-    pub (super) region:     PathContour,
-    pub (super) bounds:     Bounds<UiPoint>,
-    pub (super) controls:   Vec<SubProgramControl>,
-    pub (super) z_index:    usize,
+    pub (super) event_target:   SubProgramId,
+    pub (super) region:         PathContour,
+    pub (super) bounds:         Bounds<UiPoint>,
+    pub (super) controls:       Vec<SubProgramControl>,
+    pub (super) z_index:        usize,
 }
 
 ///

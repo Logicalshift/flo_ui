@@ -24,7 +24,7 @@ pub async fn focus(input: InputStream<Focus>, context: SceneContext) {
     let mut focus = FocusProgram {
         canvas_program:             None,
         subprogram_space:           None,
-        subprogram_data:            HashMap::new(),
+        region_data:                HashMap::new(),
         subprogram_order:           vec![],
         pointer_target:             None,
         pointer_target_program:     None,
@@ -72,11 +72,11 @@ pub async fn focus(input: InputStream<Focus>, context: SceneContext) {
             FocusPrevious                                                   => focus.focus_previous(&context).await,
 
             // Control handling
-            RemoveClaim(program_id)                                     => focus.remove_program_claims(program_id).await,
-            RemoveControlClaim(program_id, control_id)                  => focus.remove_control_claims(program_id, control_id).await,
-            SetCanvas(canvas_program_id)                                => focus.set_canvas(canvas_program_id).await,
-            ClaimRegion { program, region, z_index }                    => focus.claim_region(program, region, None, z_index, &context).await,
-            ClaimControlRegion { program, region, control, z_index }    => focus.claim_region(program, region, Some(control), z_index, &context).await,
+            RemoveClaim(region_id)                                              => focus.remove_region_claims(region_id).await,
+            RemoveControlClaim(region_id, control_id)                           => focus.remove_control_claims(region_id, control_id).await,
+            SetCanvas(canvas_program_id)                                        => focus.set_canvas(canvas_program_id).await,
+            ClaimRegion { program, region_id, region, z_index }                 => focus.claim_region(region_id, program, region, None, z_index, &context).await,
+            ClaimControlRegion { program, region_id, region, control, z_index } => focus.claim_region(region_id, program, region, Some(control), z_index, &context).await,
         }
     }
 }

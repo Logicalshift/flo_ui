@@ -298,9 +298,12 @@ fn mouse_click_in_region() {
     in_program2_path_button_down.buttons = vec![Button::Left];
     on_canvas_button_down.buttons        = vec![Button::Left];
 
+    let region1 = RegionId::new();
+    let region2 = RegionId::new();
+
     TestBuilder::new()
-        .send_message(Focus::ClaimRegion { program: program1, region: vec![program1_path], z_index: 0 })
-        .send_message(Focus::ClaimRegion { program: program2, region: vec![program2_path], z_index: 1 })
+        .send_message(Focus::ClaimRegion { program: program1, region_id: region1, region: vec![program1_path], z_index: 0 })
+        .send_message(Focus::ClaimRegion { program: program2, region_id: region2, region: vec![program2_path], z_index: 1 })
         .send_message(Focus::SetCanvas(canvas))
 
         // Should keep tracking the mouse after the button goes down as staying in program 1
@@ -388,9 +391,11 @@ fn mouse_click_in_control_region() {
     in_program2_path_button_down.buttons = vec![Button::Left];
     on_canvas_button_down.buttons        = vec![Button::Left];
 
+    let region1 = RegionId::new();
+
     TestBuilder::new()
-        .send_message(Focus::ClaimControlRegion { program: program1, control: control1, region: vec![program1_path], z_index: 0 })
-        .send_message(Focus::ClaimControlRegion { program: program1, control: control2, region: vec![program2_path], z_index: 1 })
+        .send_message(Focus::ClaimControlRegion { program: program1, region_id: region1, control: control1, region: vec![program1_path], z_index: 0 })
+        .send_message(Focus::ClaimControlRegion { program: program1, region_id: region1, control: control2, region: vec![program2_path], z_index: 1 })
         .send_message(Focus::SetCanvas(canvas))
 
         // Should keep tracking the mouse after the button goes down as staying in program 1

@@ -22,10 +22,10 @@ pub (super) struct FocusProgram {
     pub (super) canvas_program: Option<SubProgramId>,
 
     /// x-oriented 1D scan space for subprogram regions (or None if this hasn't been calculated)
-    pub (super) subprogram_space: Option<Space1D<SubProgramId>>,
+    pub (super) subprogram_space: Option<Space1D<RegionId>>,
 
-    /// The data for each subprogram region
-    pub (super) subprogram_data: HashMap<SubProgramId, SubProgramRegion>,
+    /// The data for each focus region
+    pub (super) region_data: HashMap<RegionId, SubProgramRegion>,
 
     /// The control that pointer events should be sent to
     pub (super) pointer_target: Option<OutputSink<FocusPointerEvent>>,
@@ -293,7 +293,7 @@ impl FocusProgram {
     ///
     /// Marks a region as belonging to a certain control
     ///
-    pub async fn claim_region(&mut self, program: SubProgramId, region: Vec<UiPath>, control: Option<ControlId>, z_index: usize, context: &SceneContext) {
+    pub async fn claim_region(&mut self, region_id: RegionId, event_target: SubProgramId, region: Vec<UiPath>, control: Option<ControlId>, z_index: usize, context: &SceneContext) {
         // Get the bounds of the region
         let bounds = region.iter()
             .map(|path| path.bounding_box::<Bounds<_>>())
@@ -304,46 +304,49 @@ impl FocusProgram {
         let contour_size    = ContourSize(bounds.max().x().max(0.0) as _, bounds.max().y().max(0.0) as _);
         let region          = PathContour::from_path(region, contour_size);
 
-        // Look up or create the subprogram data
-        let program_data = self.subprogram_data.get_mut(&program);
-        let program_data = if let Some(program_data) = program_data {
-            program_data
+        // Look up or create the region data
+        let region_data = self.region_data.get_mut(&region_id);
+        let region_data = if let Some(region_data) = region_data {
+            region_data
         } else {
             // Add a new region
             let new_region = SubProgramRegion {
-                region:     PathContour::from_path::<UiPath>(vec![], contour_size),
-                bounds:     bounds.clone(),
-                controls:   vec![],
-                z_index:    0,
+                event_target:   event_target,
+                region:         PathContour::from_path::<UiPath>(vec![], contour_size),
+                bounds:         bounds.clone(),
+                controls:       vec![],
+                z_index:        0,
             };
-            self.subprogram_data.insert(program, new_region);
+            self.region_data.insert(region_id, new_region);
 
             // Send the greeting to the subprogram
-            self.greet_new_subprogram(program, context).await;
+            self.greet_new_subprogram(event_target, context).await;
 
-            // Fetch the program we just added
-            self.subprogram_data.get_mut(&program).unwrap()
+            // Fetch the region we just added
+            self.region_data.get_mut(&region_id).unwrap()
         };
 
         if let Some(control) = control {
             // Make sure the bounds includes the region
-            program_data.bounds = program_data.bounds.union_bounds(bounds);
+            region_data.bounds = region_data.bounds.union_bounds(bounds);
 
-            // Add a new control
-            program_data.controls.push(SubProgramControl {
-                id:         control,
-                region:     region,
-                bounds:     bounds,
-                z_index:    z_index,
+            // Add a new control (the control may route events to a different program than the base region)
+            region_data.controls.push(SubProgramControl {
+                id:             control,
+                event_target:   event_target,
+                region:         region,
+                bounds:         bounds,
+                z_index:        z_index,
             })
         } else {
-            // Not setting the region for a control: update the region set for the subprogram
-            let combined_bounds = program_data.controls.iter()
+            // Not setting the region for a control: update the base region shape and program
+            let combined_bounds = region_data.controls.iter()
                 .fold(bounds, |a, b| a.union_bounds(b.bounds));
 
-            program_data.region   = region;
-            program_data.bounds   = combined_bounds;
-            program_data.z_index  = z_index;
+            region_data.event_target    = event_target;
+            region_data.region          = region;
+            region_data.bounds          = combined_bounds;
+            region_data.z_index         = z_index;
         }
 
         // Space becomes None (need to recalculate it before we can handle click events)
@@ -351,15 +354,27 @@ impl FocusProgram {
     }
 
     ///
-    /// Removes all claims to space that match the specified subprogram
+    /// Removes all claims for the specified region
     ///
-    pub async fn remove_program_claims(&mut self, program: SubProgramId) {
-        self.subprogram_data.remove(&program);
+    pub async fn remove_region_claims(&mut self, region_id: RegionId) {
+        self.region_data.remove(&region_id);
         self.subprogram_space = None;
     }
 
     ///
-    /// Removes all claims to space that match the specified subprogram
+    /// Removes all claims that belong to the specified program (called when the program stops)
+    ///
+    pub async fn remove_program_claims(&mut self, program: SubProgramId) {
+        // Remove all base regions that belong to this program, plus any controls in other regions
+        self.region_data.retain(|_, region| region.event_target != program);
+        for region in self.region_data.values_mut() {
+            region.controls.retain(|ctrl| ctrl.event_target != program);
+        }
+        self.subprogram_space = None;
+    }
+
+    ///
+    /// Removes all keyboard focus tracking for the specified program
     ///
     pub async fn remove_program_focus(&mut self, program: SubProgramId) {
         self.tab_ordering.remove(&program);
@@ -369,9 +384,9 @@ impl FocusProgram {
     ///
     /// Removes the claim that matches the specified control
     ///
-    pub async fn remove_control_claims(&mut self, program: SubProgramId, control: ControlId) {
-        if let Some(program_data) = self.subprogram_data.get_mut(&program) {
-            program_data.controls.retain(|item| item.id != control);
+    pub async fn remove_control_claims(&mut self, region_id: RegionId, control: ControlId) {
+        if let Some(region_data) = self.region_data.get_mut(&region_id) {
+            region_data.controls.retain(|item| item.id != control);
         }
     }
 
@@ -399,22 +414,22 @@ impl FocusProgram {
     /// Determines the target program at a location in the canvas, filtering out any programs/controls that shouldn't be matched
     ///
     fn pointer_target_filter(&mut self, location_in_canvas: Option<(f64, f64)>, should_match: impl Fn(SubProgramId, Option<ControlId>) -> bool) -> (Option<SubProgramId>, Option<ControlId>) {
-        let space                   = &mut self.subprogram_space;
-        let subprogram_data         = &self.subprogram_data;
+        let space       = &mut self.subprogram_space;
+        let region_data = &self.region_data;
 
         // Generate the space if it's not already generated
         let space = if let Some(space) = space {
             space
         } else {
-            *space = Some(Space1D::from_data(subprogram_data.iter().map(|(program_id, region)| (region.bounds.min().x()..region.bounds.max().x(), *program_id))));
+            *space = Some(Space1D::from_data(region_data.iter().map(|(region_id, region)| (region.bounds.min().x()..region.bounds.max().x(), *region_id))));
             space.as_mut().unwrap()
         };
 
         // Locate the subprogram that the pointer is over
         if let Some((x, y)) = location_in_canvas {
-            // Find all of the subprograms where the point might be inside
+            // Find all of the regions where the point might be inside
             let mut possible_target_programs = space.data_at_point(x)
-                .flat_map(|subprogram_id| subprogram_data.get(subprogram_id).map(|region| (subprogram_id, region)))
+                .flat_map(|region_id| region_data.get(region_id).map(|region| (region_id, region)))
                 .filter(|(_, region)| UiPoint(x, y).in_bounds(&region.bounds))
                 .filter(|(_, region)| region.point_is_inside(x, y))
                 .collect::<Vec<_>>();
@@ -424,19 +439,21 @@ impl FocusProgram {
                 possible_target_programs.sort_by_key(|(_, region)| region.z_index);
             }
 
-            // Locate the control in the target program
+            // Locate the control in the target region
             let possible_controls = possible_target_programs.into_iter()
-                .rev()                          // Because the 'nearest' program is last due to the ordering
-                .map(|(program_id, _)| program_id)
-                .flat_map(|target_program| {
-                    let target_program      = *target_program;
-                    let target_program_data = subprogram_data.get(&target_program);
+                .rev()                          // Because the 'nearest' region is last due to the ordering
+                .map(|(region_id, _)| region_id)
+                .flat_map(|target_region_id| {
+                    let target_region_id    = *target_region_id;
+                    let target_region_data  = region_data.get(&target_region_id);
 
-                    target_program_data
+                    target_region_data
                         .into_iter()
-                        .flat_map(move |target_program_data| {
+                        .flat_map(move |target_region_data| {
+                            let event_target = target_region_data.event_target;
+
                             // Find the control that the point might be inside
-                            let mut possible_controls = target_program_data.controls.iter()
+                            let mut possible_controls = target_region_data.controls.iter()
                                 .filter(|control| UiPoint(x, y).in_bounds(&control.bounds))
                                 .filter(|control| control.point_is_inside(x, y))
                                 .collect::<Vec<_>>();
@@ -446,9 +463,9 @@ impl FocusProgram {
                                 possible_controls.sort_by_key(|control| control.z_index);
                             }
 
-                            // If no controls match, then add in the 'base' program canvas
+                            // If no controls match, then add in the 'base' event target
                             let base = if possible_controls.is_empty() {
-                                Some((target_program, None))
+                                Some((event_target, None))
                             } else {
                                 None
                             };
@@ -456,7 +473,7 @@ impl FocusProgram {
                             // The highest z-index is the target control
                             possible_controls.into_iter()
                                 .rev()
-                                .map(move |control| (target_program, Some(control.id)))
+                                .map(move |control| (control.event_target, Some(control.id)))
                                 .chain(base)
                         })
                 });
@@ -655,7 +672,8 @@ impl FocusProgram {
     ///
     pub async fn send_to_all(&mut self, event: impl Clone + SceneMessage, context: &SceneContext) {
         // Make a list of all the subprograms we know about
-        let all_subprograms = self.subprogram_data.keys().copied()
+        let all_subprograms = self.region_data.values()
+            .map(|region| region.event_target)
             .chain(self.subprogram_order.iter().copied())
             .collect::<HashSet<_>>();
 
