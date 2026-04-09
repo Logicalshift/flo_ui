@@ -117,7 +117,10 @@ pub async fn pie_dialog_drawing_program(
                 drawing.stroke();
 
                 // Draw the contents of the slice
+                drawing.push_state();
+                //drawing.clip();
                 drawing.extend(slice_drawing.iter().cloned());
+                drawing.pop_state();
 
                 // TODO: draw the title of the slice
 
