@@ -52,9 +52,9 @@ fn main() {
             let mut pie         = context.send(pie_program).unwrap();
             let mut pie_drawing = vec![];
 
-            // Draw a rectangle
+            // Draw a rectangle inset into the dialog
             pie_drawing.new_path();
-            pie_drawing.rect((-pie_w/2.0) as _, 0.0, (pie_w/2.0) as _, 236.0);
+            pie_drawing.rect((-pie_w/2.0+4.0) as _, 16.0, (pie_w/2.0-4.0) as _, 236.0-4.0);
             pie_drawing.stroke_color(Color::Rgba(0.6, 0.6, 0.6, 1.0));
             pie_drawing.line_width_pixels(1.0);
             pie_drawing.stroke();
