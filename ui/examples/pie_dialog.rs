@@ -16,7 +16,7 @@ fn main() {
 
         // Run a pie dialog subprogram
         let pie_program = SubProgramId::new();
-        let pie         = PieDialogProgram::new(UiPoint(500.0, 500.0), 45.0, NamespaceId::new(), LayerId(0))
+        let pie         = PieDialogProgram::new(UiPoint(500.0, 500.0), 30.0, NamespaceId::new(), LayerId(0))
             .with_inner_radius(64.0)
             .with_outer_radius(300.0)
             .with_title("Pie dialog");
