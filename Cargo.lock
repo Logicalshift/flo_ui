@@ -910,9 +910,9 @@ dependencies = [
 
 [[package]]
 name = "fastrand"
-version = "2.3.0"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
 
 [[package]]
 name = "fax"
@@ -975,7 +975,7 @@ dependencies = [
 [[package]]
 name = "flo_canvas"
 version = "0.4.0"
-source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#d16b97553e5f1e8f9928f56ab710d2341046fa85"
+source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#408429132f7db767f768f74ff05119712c68735f"
 dependencies = [
  "allsorts",
  "desync",
@@ -1000,7 +1000,7 @@ dependencies = [
 [[package]]
 name = "flo_canvas_events"
 version = "0.4.0"
-source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#d16b97553e5f1e8f9928f56ab710d2341046fa85"
+source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#408429132f7db767f768f74ff05119712c68735f"
 dependencies = [
  "flo_canvas",
  "flo_render",
@@ -1022,7 +1022,7 @@ dependencies = [
 [[package]]
 name = "flo_draw"
 version = "0.4.0"
-source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#d16b97553e5f1e8f9928f56ab710d2341046fa85"
+source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#408429132f7db767f768f74ff05119712c68735f"
 dependencies = [
  "desync",
  "flo_binding",
@@ -1051,7 +1051,7 @@ dependencies = [
 [[package]]
 name = "flo_render"
 version = "0.4.0"
-source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#d16b97553e5f1e8f9928f56ab710d2341046fa85"
+source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#408429132f7db767f768f74ff05119712c68735f"
 dependencies = [
  "bindgen",
  "core-foundation 0.10.1",
@@ -1064,7 +1064,7 @@ dependencies = [
 [[package]]
 name = "flo_render_canvas"
 version = "0.4.0"
-source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#d16b97553e5f1e8f9928f56ab710d2341046fa85"
+source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#408429132f7db767f768f74ff05119712c68735f"
 dependencies = [
  "desync",
  "flo_canvas",
@@ -1079,7 +1079,7 @@ dependencies = [
 [[package]]
 name = "flo_render_gl_offscreen"
 version = "0.4.0"
-source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#d16b97553e5f1e8f9928f56ab710d2341046fa85"
+source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#408429132f7db767f768f74ff05119712c68735f"
 dependencies = [
  "bindgen",
  "cgl",
@@ -1091,7 +1091,7 @@ dependencies = [
 [[package]]
 name = "flo_render_software"
 version = "0.4.0"
-source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#d16b97553e5f1e8f9928f56ab710d2341046fa85"
+source = "git+https://github.com/Logicalshift/flo_draw?branch=v0.4#408429132f7db767f768f74ff05119712c68735f"
 dependencies = [
  "base64",
  "flo_canvas",
@@ -1794,9 +1794,9 @@ dependencies = [
 
 [[package]]
 name = "libz-sys"
-version = "1.1.25"
+version = "1.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d52f4c29e2a68ac30c9087e1b772dc9f44a2b66ed44edf2266cf2be9b03dafc1"
+checksum = "fc3a226e576f50782b3305c5ccf458698f92798987f551c6a02efe8276721e22"
 dependencies = [
  "cc",
  "pkg-config",
@@ -3161,9 +3161,9 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.27"
+version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
+checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 
 [[package]]
 name = "serde"
@@ -3502,9 +3502,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.51.0"
+version = "1.51.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bd1c4c0fc4a7ab90fc15ef6daaa3ec3b893f004f915f2392557ed23237820cd"
+checksum = "f66bf9585cda4b724d3e78ab34b73fb2bbaba9011b9bfdf69dc836382ea13b8c"
 dependencies = [
  "libc 0.2.184",
  "mio",
@@ -3524,9 +3524,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.25.10+spec-1.1.0"
+version = "0.25.11+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a82418ca169e235e6c399a84e395ab6debeb3bc90edc959bf0f48647c6a32d1b"
+checksum = "0b59c4d22ed448339746c59b905d24568fcbb3ab65a500494f7b8c3e97739f2b"
 dependencies = [
  "indexmap",
  "toml_datetime",
