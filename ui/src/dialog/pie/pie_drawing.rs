@@ -128,7 +128,7 @@ pub async fn pie_dialog_drawing_program(
                 drawing.push_state();
                 drawing.new_path();
                 drawing.bezier_path(&pie_slice);
-                //drawing.clip();
+                drawing.clip();
                 drawing.extend(slice_drawing.iter().cloned());
                 drawing.pop_state();
 
