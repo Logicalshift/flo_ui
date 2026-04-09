@@ -1,4 +1,5 @@
 use super::control_id::*;
+use super::region_id::*;
 use crate::util::*;
 use crate::focus::*;
 
@@ -53,16 +54,16 @@ pub enum Focus {
 
     /// Claims a region inside the specified path as belonging to the specified subprogram. The z-index is used to disambiguate requests if more than region matches
     /// Clicks in this region will have 'None' as the control ID
-    ClaimRegion { program: SubProgramId, region: Vec<UiPath>, z_index: usize },
+    ClaimRegion { region_id: RegionId, program: SubProgramId, region: Vec<UiPath>, z_index: usize },
 
     /// Claims a region for a single control within the region for a subprogram. The z-index here is used to disambiguate when multiple regions matches
-    ClaimControlRegion { program: SubProgramId, region: Vec<UiPath>, control: ControlId, z_index: usize },
+    ClaimControlRegion { region_id: RegionId, program: SubProgramId, region: Vec<UiPath>, control: ControlId, z_index: usize },
 
-    /// Removes a claim added by ClaimRegion
-    RemoveClaim(SubProgramId),
+    /// Removes a claim added by ClaimRegion (including any controls within that region)
+    RemoveClaim(RegionId),
 
     /// Removes a claim added by ClaimControlRegion
-    RemoveControlClaim(SubProgramId, ControlId),
+    RemoveControlClaim(RegionId, ControlId),
 }
 
 impl SceneMessage for Focus {
