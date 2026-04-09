@@ -99,25 +99,35 @@ pub async fn pie_dialog_drawing_program(
                 let outer_arc = Circle::new(UiPoint(0.0, 0.0), outer_radius);
                 let outer_arc = outer_arc.arc(-f64::consts::PI/4.0, f64::consts::PI/4.0).to_bezier_curve::<Curve<UiPoint>>();
 
-                let path = vec![
+                let pie_slice = UiPath::from_curves(&vec![
                     inner_arc.clone(),
                     line_to_bezier(&(inner_arc.end_point(), outer_arc.end_point())),
                     outer_arc.reverse(),
                     line_to_bezier(&(outer_arc.start_point(), inner_arc.start_point())),
-                ];
-                let pie_slice = UiPath::from_curves(&path);
+                ]);
+                let slice_outline = UiPath::from_curves(&vec![
+                    line_to_bezier(&(inner_arc.end_point(), outer_arc.end_point())),
+                    outer_arc.reverse(),
+                    line_to_bezier(&(outer_arc.start_point(), inner_arc.start_point())),
+                ]);
 
                 drawing.new_path();
                 drawing.bezier_path(&pie_slice);
 
-                drawing.line_width_pixels(1.0);
-                drawing.stroke_color(Color::Rgba(0.3, 0.6, 0.7, 0.9));
                 drawing.fill_color(Color::Rgba(0.85, 0.95, 1.0, 0.95));
                 drawing.fill();
+
+                drawing.new_path();
+                drawing.bezier_path(&slice_outline);
+
+                drawing.line_width_pixels(1.0);
+                drawing.stroke_color(Color::Rgba(0.3, 0.6, 0.7, 0.9));
                 drawing.stroke();
 
                 // Draw the contents of the slice
                 drawing.push_state();
+                drawing.new_path();
+                drawing.bezier_path(&pie_slice);
                 //drawing.clip();
                 drawing.extend(slice_drawing.iter().cloned());
                 drawing.pop_state();
