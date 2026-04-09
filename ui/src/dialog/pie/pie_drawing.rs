@@ -135,7 +135,7 @@ pub async fn pie_dialog_drawing_program(
                 let (center, angle) = position.get();
 
                 // Rotate to the angle, then move to the position
-                let rotate      = Transform2D::rotate(angle as _);
+                let rotate      = Transform2D::rotate(-angle as _);
                 let translate   = Transform2D::translate(center.x() as _, center.y() as _);
 
                 layer_transform = translate * rotate;

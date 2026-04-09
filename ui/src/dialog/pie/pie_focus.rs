@@ -56,7 +56,7 @@ impl PieFocusRegion {
     ///
     pub fn region_for_position(&self, center: UiPoint, angle: f64) -> Vec<UiPath> {
         // Rotate then translate the position to get the final location
-        let rotate      = Transform2D::rotate(angle as _);
+        let rotate      = Transform2D::rotate(-angle as _);
         let translate   = Transform2D::translate(center.x() as _, center.y() as _);
 
         let transform   = translate * rotate;
@@ -240,7 +240,7 @@ pub async fn pie_dialog_focus_program(
                 slice = vec![path];
 
                 // Generate the 'background' slice for this dialog
-                let transform = Transform2D::translate(center.x() as _, center.y() as _) * Transform2D::rotate(angle as _);
+                let transform = Transform2D::translate(center.x() as _, center.y() as _) * Transform2D::rotate(-angle as _);
 
                 let background_slice = Focus::ClaimRegion {
                     program:    event_program,
@@ -271,7 +271,7 @@ pub async fn pie_dialog_focus_program(
                 }
 
                 // Update the 'background' slice for this dialog
-                let transform = Transform2D::translate(center.x() as _, center.y() as _) * Transform2D::rotate(angle as _);
+                let transform = Transform2D::translate(center.x() as _, center.y() as _) * Transform2D::rotate(-angle as _);
 
                 let background_slice = Focus::ClaimRegion {
                     program:    event_program,
