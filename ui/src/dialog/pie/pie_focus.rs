@@ -74,9 +74,10 @@ impl PieFocusRegion {
     ///
     /// Creates the claim for this region when the pie is in a certain position
     ///
-    pub fn claim(&self, event_program: SubProgramId, center: UiPoint, angle: f64) -> Focus {
-        Focus::ClaimControlRegion { 
-            program:    event_program, 
+    pub fn claim(&self, event_program: SubProgramId, region_id: RegionId, center: UiPoint, angle: f64) -> Focus {
+        Focus::ClaimControlRegion {
+            program:    event_program,
+            region_id:  region_id,
             control:    self.control,
             region:     self.region_for_position(center, angle),
             z_index:    self.z_index,
@@ -86,8 +87,8 @@ impl PieFocusRegion {
     ///
     /// Creates the message to remove the claim for this region
     ///
-    pub fn remove_claim(&self, event_program: SubProgramId) -> Focus {
-        Focus::RemoveControlClaim(event_program, self.control)
+    pub fn remove_claim(&self, region_id: RegionId) -> Focus {
+        Focus::RemoveControlClaim(region_id, self.control)
     }
 }
 
@@ -122,6 +123,7 @@ pub async fn pie_dialog_focus_program(
 
     // Start a subprogram that will handle focus events and pass them on to the appropriate program after mapping them
     let event_program           = SubProgramId::new();
+    let region_id               = RegionId::new();
     let event_focus_programs    = focus_programs.clone();
     context.send_message(SceneControl::start_child_program(event_program, our_program_id, move |input, context| pie_dialog_focus_event_program(input, context, event_focus_programs, pie_mapping), 20)).await.ok();
 
@@ -165,7 +167,7 @@ pub async fn pie_dialog_focus_program(
                 for control_id in new_controls.into_iter() {
                     let Some(new_claim) = focus_programs.get(&control_id).cloned() else { continue; };
 
-                    focus_messages.push(new_claim.claim(event_program, center, angle));
+                    focus_messages.push(new_claim.claim(event_program, region_id, center, angle));
                     claims.insert(control_id, new_claim);
                 }
 
@@ -186,13 +188,13 @@ pub async fn pie_dialog_focus_program(
                     }
 
                     // Update the claim
-                    focus_messages.push(existing_claim.remove_claim(event_program));
+                    focus_messages.push(existing_claim.remove_claim(region_id));
 
                     existing_claim.path     = new_claim.path.clone();
                     existing_claim.control  = new_claim.control;
                     existing_claim.target   = new_claim.target;
 
-                    focus_messages.push(existing_claim.claim(event_program, center, angle));
+                    focus_messages.push(existing_claim.claim(event_program, region_id, center, angle));
                 }
 
                 // Remove any claims that are no longer present
@@ -205,7 +207,7 @@ pub async fn pie_dialog_focus_program(
                 for control_id in removed_controls.into_iter() {
                     let Some(old_claim) = claims.remove(&control_id) else { continue; };
 
-                    focus_messages.push(old_claim.remove_claim(event_program));
+                    focus_messages.push(old_claim.remove_claim(region_id));
                 }
 
                 // Send the messages
@@ -240,9 +242,10 @@ pub async fn pie_dialog_focus_program(
                 // Generate the 'background' slice for this dialog
                 let transform = Transform2D::translate(center.x() as _, center.y() as _) * Transform2D::rotate(angle as _);
 
-                let background_slice = Focus::ClaimRegion { 
-                    program:    event_program, 
-                    region:     slice.iter().map(|path| path.map_points(|UiPoint(x, y)| { let (x, y) = transform.transform_point(x as _, y as _); UiPoint(x as _, y as _) })).collect(), 
+                let background_slice = Focus::ClaimRegion {
+                    program:    event_program,
+                    region_id:  region_id,
+                    region:     slice.iter().map(|path| path.map_points(|UiPoint(x, y)| { let (x, y) = transform.transform_point(x as _, y as _); UiPoint(x as _, y as _) })).collect(),
                     z_index:    pie_z_index,
                 };
 
@@ -261,7 +264,7 @@ pub async fn pie_dialog_focus_program(
 
                 // Update all of the existing claims with the new positions
                 let focus_messages = claims.values()
-                    .map(|claim| claim.claim(event_program, center, angle));
+                    .map(|claim| claim.claim(event_program, region_id, center, angle));
 
                 for msg in focus_messages {
                     focus.send(msg).await.ok();
@@ -270,9 +273,10 @@ pub async fn pie_dialog_focus_program(
                 // Update the 'background' slice for this dialog
                 let transform = Transform2D::translate(center.x() as _, center.y() as _) * Transform2D::rotate(angle as _);
 
-                let background_slice = Focus::ClaimRegion { 
-                    program:    event_program, 
-                    region:     slice.iter().map(|path| path.map_points(|UiPoint(x, y)| { let (x, y) = transform.transform_point(x as _, y as _); UiPoint(x as _, y as _) })).collect(), 
+                let background_slice = Focus::ClaimRegion {
+                    program:    event_program,
+                    region_id:  region_id,
+                    region:     slice.iter().map(|path| path.map_points(|UiPoint(x, y)| { let (x, y) = transform.transform_point(x as _, y as _); UiPoint(x as _, y as _) })).collect(),
                     z_index:    pie_z_index,
                 };
 
@@ -287,12 +291,12 @@ pub async fn pie_dialog_focus_program(
     drop(position_lifetime);
 
     // Release all the claims
-    let remove_claims = claims.values().map(|claim| claim.remove_claim(event_program));
+    let remove_claims = claims.values().map(|claim| claim.remove_claim(region_id));
     for msg in remove_claims {
         focus.send(msg).await.ok();
     }
 
-    focus.send(Focus::RemoveClaim(our_program_id)).await.ok();
+    focus.send(Focus::RemoveClaim(region_id)).await.ok();
 }
 
 ///
