@@ -73,6 +73,7 @@ pub async fn pie_dialog_drawing_program(
 
     // Note: calling 'when_changed' before retrieving the new value is important to avoid a race condition where the change arrives after we've retrieved it
     let mut drawing_lifetime    = None;
+    let mut animation_lifetime  = None;
     let mut position_lifetime   = None;
 
     while let Some(update) = input.next().await {
@@ -168,6 +169,9 @@ pub async fn pie_dialog_drawing_program(
             },
 
             PieDrawingUpdate::UpdateAnimation => { 
+                // Request an update next time the animation position changes
+                animation_lifetime = Some(open_anim.when_changed(NotifySubprogram::send(PieDrawingUpdate::UpdateAnimation, &context, our_program_id)));
+
                 // TODO: action depends on the animation that's running
             },
         }
@@ -176,4 +180,5 @@ pub async fn pie_dialog_drawing_program(
     // Done listening for events
     drop(drawing_lifetime.take());
     drop(position_lifetime.take());
+    drop(animation_lifetime.take());
 }
