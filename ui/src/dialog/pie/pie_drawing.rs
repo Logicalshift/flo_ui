@@ -172,7 +172,22 @@ pub async fn pie_dialog_drawing_program(
                 // Request an update next time the animation position changes
                 animation_lifetime = Some(open_anim.when_changed(NotifySubprogram::send(PieDrawingUpdate::UpdateAnimation, &context, our_program_id)));
 
-                // TODO: action depends on the animation that's running
+                // TODO: action depends on the animation that's running (this does a basic scaling animation)
+                let (animation_type, animation_pos) = open_anim.get();
+
+                animation_transform = Transform2D::scale(animation_pos as _, animation_pos as _);
+
+                // Update layer using the animation transform
+                let mut drawing = vec![];
+                drawing.push_state();
+
+                drawing.namespace(namespace);
+                drawing.layer(layer);
+                drawing.set_layer_transform(layer_transform * animation_transform);
+
+                drawing.pop_state();
+
+                drawing_request.send(DrawingRequest::Draw(Arc::new(drawing))).await.ok();
             },
         }
     }
