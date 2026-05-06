@@ -9,6 +9,7 @@ use crate::util::*;
 use flo_binding::*;
 use flo_scene::*;
 use flo_scene::programs::*;
+use flo_scene_binding::*;
 use flo_draw::canvas::*;
 use flo_curves::*;
 
@@ -251,7 +252,16 @@ impl PieDialogProgram {
             let title        = bind(self.title.clone());
 
             // Animation status
-            let animation = bind((self.animation, 1.0));
+            let animation = self.animation;
+            let animation = match self.animation {
+                PieAnimation::None  => BindRef::from(computed(move || (animation, 1.0))),
+                _                   => {
+                    let anim_pos = animate_binding(AnimationDescription::ease_out(20.0), &context);
+                    anim_pos.start();
+
+                    BindRef::from(computed(move || (animation, anim_pos.get().min(0.05))))
+                },
+            };
 
             // Stream for processing the draw instructions
             let (send_drawing, recv_drawing) = mpsc::channel::<Draw>(1000);
