@@ -26,7 +26,7 @@ fn main() {
 
         window.add_subprogram(pie_program, move |input, context| { pie.run(input, context) }, 1);
 
-        // Run a subprogram that renders 'Hello, world' to the window
+        // Run a subprogram that renders 'Hello, world' to the pie dialog
         window.add_subprogram(SubProgramId::new(), |_input: InputStream<()>, context| async move {
             // Set up the canvas
             context.draw(|gc| async move {
@@ -82,5 +82,26 @@ fn main() {
 
             pie.send(PieDialog::Draw(Arc::new(pie_drawing))).await.ok();
         }, 1);
+
+        // Run a subprogram that closes the pie dialog if you right-click on the window
+        window.add_subprogram(SubProgramId::new(), move |input, context| async move {
+            // Set ourselves as the main canvas
+            context.send_message(Focus::SetCanvas(context.current_program_id().unwrap())).await.unwrap();
+
+            let mut input = input;
+            while let Some(evt) = input.next().await {
+                match evt {
+                    FocusPointerEvent::Pointer(_, PointerAction::ButtonDown, _, state) => {
+                        // If the user clicks the right mouse anywhere, close the pie dialog
+                        if state.buttons.contains(&Button::Right) {
+                            let mut pie = context.send(pie_program).unwrap();
+                            pie.send(PieDialog::Close).await.unwrap();
+                        }
+                    }
+
+                    _ => { }
+                }
+            }
+        }, 20);
     });
 }
