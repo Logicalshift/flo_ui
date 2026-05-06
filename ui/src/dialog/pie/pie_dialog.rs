@@ -259,7 +259,7 @@ impl PieDialogProgram {
                     let anim_pos = animate_binding(AnimationDescription::ease_out(20.0), &context);
                     anim_pos.start();
 
-                    BindRef::from(computed(move || (animation, anim_pos.get().min(0.05))))
+                    BindRef::from(computed(move || (animation, anim_pos.get().max(0.05))))
                 },
             };
 
