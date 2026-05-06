@@ -252,15 +252,28 @@ impl PieDialogProgram {
             let title        = bind(self.title.clone());
 
             // Animation status
-            let animation = self.animation;
-            let anim_pos  = animate_binding(AnimationDescription::ease_out(0.25), &context);
+            let animation   = self.animation;
+            let open_pos    = animate_binding(AnimationDescription::ease_out(0.25), &context);
+            let close_pos   = animate_binding(AnimationDescription::ease_in(0.25).with_when_finished(move |context| async move {
+                // When the close animation finishes, the program stops
+                context.send_message(SceneControl::Close(our_program_id)).await.ok();
+            }), &context);
+
             let animation = match self.animation {
                 PieAnimation::None  => BindRef::from(computed(move || (animation, 1.0))),
                 _                   => {
-                    let anim_pos = anim_pos.clone();
-                    anim_pos.start();
+                    let open_pos    = open_pos.clone();
+                    let close_pos   = close_pos.clone();
+                    open_pos.start();
 
-                    BindRef::from(computed(move || (animation, anim_pos.get().max(0.05))))
+                    BindRef::from(computed(move || {
+                        let open_pos    = open_pos.get();
+                        let close_pos   = close_pos.get();
+
+                        let anim_pos    = open_pos * (1.0 - close_pos);
+
+                        (animation, anim_pos.max(0.05))
+                    }))
                 },
             };
 
@@ -366,8 +379,13 @@ impl PieDialogProgram {
                     },
 
                     PieDialog::Close => {
-                        // TODO: animation
-                        break;
+                        if self.animation != PieAnimation::None {
+                            // Run the close animation (it stops the program using SceneControl when it's done)
+                            close_pos.start();
+                        } else {
+                            // No animation: just stop
+                            break;
+                        }
                     },
                 }
             }
