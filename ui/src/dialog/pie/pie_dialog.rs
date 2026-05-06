@@ -253,10 +253,11 @@ impl PieDialogProgram {
 
             // Animation status
             let animation = self.animation;
+            let anim_pos  = animate_binding(AnimationDescription::ease_out(0.25), &context);
             let animation = match self.animation {
                 PieAnimation::None  => BindRef::from(computed(move || (animation, 1.0))),
                 _                   => {
-                    let anim_pos = animate_binding(AnimationDescription::ease_out(20.0), &context);
+                    let anim_pos = anim_pos.clone();
                     anim_pos.start();
 
                     BindRef::from(computed(move || (animation, anim_pos.get().max(0.05))))
