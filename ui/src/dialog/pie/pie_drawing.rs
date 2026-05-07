@@ -196,4 +196,17 @@ pub async fn pie_dialog_drawing_program(
     drop(drawing_lifetime.take());
     drop(position_lifetime.take());
     drop(animation_lifetime.take());
+
+    // Clear the layer when the drawing program stops
+    let mut drawing = vec![];
+    drawing.push_state();
+
+    drawing.namespace(namespace);
+    drawing.layer(layer);
+    drawing.set_layer_transform(Transform2D::identity());
+    drawing.clear_layer();
+
+    drawing.pop_state();
+
+    drawing_request.send(DrawingRequest::Draw(Arc::new(drawing))).await.ok();
 }
