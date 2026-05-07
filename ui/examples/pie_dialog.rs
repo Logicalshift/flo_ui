@@ -84,6 +84,10 @@ fn main() {
         }, 1);
 
         // Run a subprogram that closes the pie dialog if you right-click on the window
+        window.connect_programs((),
+            StreamTarget::Filtered(FilterHandle::for_filter(|draw_events| draw_events.map(|evt| Focus::Event(evt))), subprogram_focus()),
+            StreamId::with_message_type::<DrawEvent>()).unwrap();
+
         window.add_subprogram(SubProgramId::new(), move |input, context| async move {
             // Set ourselves as the main canvas
             context.send_message(Focus::SetCanvas(context.current_program_id().unwrap())).await.unwrap();
