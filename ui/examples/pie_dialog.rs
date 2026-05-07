@@ -95,11 +95,11 @@ fn main() {
             let mut input = input;
             while let Some(evt) = input.next().await {
                 match evt {
-                    FocusPointerEvent::Pointer(_, PointerAction::ButtonDown, _, state) => {
+                    FocusPointerEvent::Pointer(_, PointerAction::ButtonUp, _, state) => {
                         // If the user clicks the right mouse anywhere, close the pie dialog
                         if state.buttons.contains(&Button::Right) {
                             let mut pie = context.send(pie_program).unwrap();
-                            pie.send(PieDialog::Close).await.unwrap();
+                            pie.send(PieDialog::Close).await.ok();
                         }
                     }
 
